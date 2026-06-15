@@ -64,7 +64,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -96,7 +98,7 @@ fun FeedItem(
     onChallengeClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    var liked by remember(video.id) { mutableStateOf(video.isLiked) }
+    var reaction by remember(video.id) { mutableStateOf<Reaction?>(if (video.isLiked) Reaction.Like else null) }
     var followed by remember(video.id) { mutableStateOf(video.isFollowing) }
     var captionExpanded by remember(video.id) { mutableStateOf(false) }
     var progress by remember(video.id) { mutableFloatStateOf(0f) }
@@ -106,6 +108,13 @@ fun FeedItem(
     LaunchedEffect(isCurrentPage) {
         if (!isCurrentPage) userPaused = false
     }
+
+    // Révélation premium du HUD (rail + infos) quand la vidéo devient active.
+    val hud by animateFloatAsState(
+        targetValue = if (isCurrentPage) 1f else 0f,
+        animationSpec = tween(durationMillis = 320),
+        label = "hudReveal"
+    )
 
     // Heart pop : compteur incrémenté à chaque double-tap → déclenche l'animation
     var heartPopKey by remember(video.id) { mutableIntStateOf(0) }
@@ -127,7 +136,7 @@ fun FeedItem(
                 detectTapGestures(
                     onTap = { userPaused = !userPaused },
                     onDoubleTap = {
-                        if (!liked) liked = true
+                        if (reaction == null) reaction = Reaction.Love
                         heartPopKey++
                     }
                 )
@@ -164,15 +173,28 @@ fun FeedItem(
             }
         }
 
-        // Scrim bas pour la lisibilité du texte
+        // Scrims cinématiques : voile haut léger (header), dégradé bas riche (texte),
+        // + vignette droite discrète pour détacher le rail d'actions du fond clair.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.6f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.78f)
+                        0f to Color.Black.copy(alpha = 0.34f),
+                        0.16f to Color.Transparent,
+                        0.52f to Color.Transparent,
+                        0.82f to Color.Black.copy(alpha = 0.55f),
+                        1f to Color.Black.copy(alpha = 0.90f)
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        0.55f to Color.Transparent,
+                        1f to Color.Black.copy(alpha = 0.26f)
                     )
                 )
         )
@@ -216,15 +238,19 @@ fun FeedItem(
         // Rail droit épuré : Avatar+Follow, Like, Comment, Gift (MoMo), Send, More
         ActionRail(
             video = video,
-            liked = liked,
+            reaction = reaction,
             followed = followed,
-            onToggleLike = { liked = !liked },
+            onReact = { reaction = it },
             onToggleFollow = { followed = true },
             onCommentClick = onCommentClick,
             onGiftClick = onGiftClick,
             onShareClick = { shareVideo(context, video) },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
+                .graphicsLayer {
+                    alpha = hud
+                    translationX = (1f - hud) * 36.dp.toPx()
+                }
                 .padding(end = 10.dp, bottom = 110.dp)
         )
 
@@ -237,6 +263,10 @@ fun FeedItem(
             onToggleFollow = { followed = true },
             modifier = Modifier
                 .align(Alignment.BottomStart)
+                .graphicsLayer {
+                    alpha = hud
+                    translationY = (1f - hud) * 24.dp.toPx()
+                }
                 .padding(start = 14.dp, end = 78.dp, bottom = 18.dp)
                 .fillMaxWidth(0.82f)
         )
@@ -346,9 +376,9 @@ private fun ChallengeButton(onClick: () -> Unit) {
 @Composable
 private fun ActionRail(
     video: FeedVideoUi,
-    liked: Boolean,
+    reaction: Reaction?,
     followed: Boolean,
-    onToggleLike: () -> Unit,
+    onReact: (Reaction?) -> Unit,
     onToggleFollow: () -> Unit,
     onCommentClick: () -> Unit,
     onGiftClick: () -> Unit,
@@ -367,13 +397,10 @@ private fun ActionRail(
             onToggleFollow = onToggleFollow
         )
 
-        ActionPill(
-            icon = if (liked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-            tint = if (liked) UnovColors.Accent else Color.White,
-            count = video.likesFmt,
-            onClick = onToggleLike,
-            label = "J'aime",
-            pop = liked
+        ReactionAction(
+            current = reaction,
+            countFmt = video.likesFmt,
+            onSelect = onReact
         )
 
         ActionPill(
@@ -478,8 +505,14 @@ private fun ActionPill(
     pop: Boolean = false
 ) {
     val noRipple = remember { MutableInteractionSource() }
-    val scale by animateFloatAsState(
-        targetValue = if (pop) 1.15f else 1f,
+    val pressed by noRipple.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        targetValue = if (pressed) 0.86f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        label = "pillPress"
+    )
+    val popScale by animateFloatAsState(
+        targetValue = if (pop) 1.18f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -488,25 +521,27 @@ private fun ActionPill(
     )
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier.clickable(
-            interactionSource = noRipple,
-            indication = null,
-            onClick = onClick
-        )
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier
+            .scale(pressScale)
+            .clickable(
+                interactionSource = noRipple,
+                indication = null,
+                onClick = onClick
+            )
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = tint,
             modifier = Modifier
-                .size(36.dp)
-                .scale(scale)
+                .size(34.dp)
+                .scale(popScale)
         )
         Text(
             text = count,
             color = Color.White,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold
         )
     }
@@ -738,13 +773,15 @@ private fun VideoProgressBar(progress: Float, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(1.5.dp)
-            .background(Color.White.copy(alpha = 0.12f))
+            .height(2.5.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color.White.copy(alpha = 0.16f))
     ) {
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .clip(RoundedCornerShape(999.dp))
                 .background(UnovGradients.Gold)
         )
     }

@@ -1,8 +1,11 @@
 package com.unovapp.android.ui.feed
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -11,6 +14,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,7 +50,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.theme.UnovColors
@@ -76,8 +82,10 @@ private val GIFTS = listOf(
  */
 @Composable
 fun GiftSheet(
+    balance: Long,
     onDismiss: () -> Unit,
-    onSelectGift: (GiftSticker) -> Unit
+    onSend: (GiftSticker) -> Unit,
+    onRecharge: (deficit: Long) -> Unit
 ) {
     var shown by remember { mutableStateOf(false) }
     var selected by remember { mutableIntStateOf(-1) }
@@ -93,14 +101,6 @@ fun GiftSheet(
         animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
         label = "panel"
     )
-
-    // Après sélection : petit délai pour laisser jouer le rebond, puis paiement.
-    LaunchedEffect(selected) {
-        if (selected >= 0) {
-            delay(420)
-            onSelectGift(GIFTS[selected])
-        }
-    }
 
     val noRipple = remember { MutableInteractionSource() }
 
@@ -173,14 +173,14 @@ fun GiftSheet(
                         .border(1.dp, UnovColors.Accent.copy(alpha = 0.35f), RoundedCornerShape(999.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Bolt,
-                        contentDescription = null,
-                        tint = UnovColors.Accent,
-                        modifier = Modifier.size(13.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(13.dp)
+                            .clip(CircleShape)
+                            .background(UnovGradients.Gold)
                     )
                     Text(
-                        text = "MoMo / Moov",
+                        text = "${"%,d".format(balance).replace(',', ' ')} jetons",
                         color = UnovColors.Accent,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold
@@ -212,14 +212,58 @@ fun GiftSheet(
                 Spacer(Modifier.height(10.dp))
             }
 
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "Choisis un cadeau → paiement Mobile Money sécurisé",
-                color = UnovColors.TextMute,
-                fontSize = 11.sp,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
+            Spacer(Modifier.height(8.dp))
+
+            // Zone d'action intelligente : paiement direct si le solde suffit, sinon recharge.
+            val gift = GIFTS.getOrNull(selected)
+            when {
+                gift == null -> Text(
+                    text = "Choisis un cadeau pour l'envoyer",
+                    color = UnovColors.TextMute,
+                    fontSize = 12.sp,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+                balance >= gift.price -> GiftActionButton(
+                    text = "Envoyer ${gift.emoji}  ·  ${"%,d".format(gift.price).replace(',', ' ')} jetons",
+                    onClick = { onSend(gift) }
+                )
+                else -> {
+                    val deficit = gift.price - balance
+                    Text(
+                        text = "Solde insuffisant — il te manque ${"%,d".format(deficit).replace(',', ' ')} jetons",
+                        color = UnovColors.Danger,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    GiftActionButton(
+                        text = "Recharger mon compte",
+                        onClick = { onRecharge(deficit) }
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun GiftActionButton(text: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(UnovGradients.Gold)
+            .clickable(onClick = onClick)
+            .padding(vertical = 15.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = Color(0xFF0D0D0D),
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
@@ -234,50 +278,69 @@ private fun GiftTile(
 ) {
     val noRipple = remember { MutableInteractionSource() }
 
-    // Entrée en cascade
+    // Easing "overshoot" (easeOutBack) : l'entrée dépasse puis se pose avec rebond.
+    val backEasing = remember {
+        Easing { t -> val s = 1.9f; val u = t - 1f; u * u * ((s + 1f) * u + s) + 1f }
+    }
     val entrance by animateFloatAsState(
         targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(durationMillis = 340, delayMillis = index * 40, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 480, delayMillis = index * 55, easing = backEasing),
         label = "entrance$index"
     )
 
-    // Flottement + pulsation continus (durées légèrement différentes → organique)
+    // Vie continue multi-couches, désynchronisée par index → grille "vivante".
     val inf = rememberInfiniteTransition(label = "idle$index")
     val floatY by inf.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(1500 + index * 110, easing = LinearEasing),
-            RepeatMode.Reverse
-        ),
+        0f, 1f,
+        infiniteRepeatable(tween(1500 + index * 130, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "floatY$index"
     )
-    val pulse by inf.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            tween(1300 + index * 80, easing = FastOutSlowInEasing),
-            RepeatMode.Reverse
+    val sway by inf.animateFloat(
+        -1f, 1f,
+        infiniteRepeatable(
+            tween(2200 + index * 90, easing = FastOutSlowInEasing),
+            RepeatMode.Reverse,
+            initialStartOffset = StartOffset(index * 120)
         ),
-        label = "pulse$index"
+        label = "sway$index"
+    )
+    val breathe by inf.animateFloat(
+        0.96f, 1.05f,
+        infiniteRepeatable(tween(1300 + index * 70, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "breathe$index"
+    )
+    val glowPulse by inf.animateFloat(
+        0.4f, 1f,
+        infiniteRepeatable(tween(1600 + index * 60, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "glow$index"
     )
 
-    // Rebond à la sélection
+    // Sélection : rebond ample + onde de choc.
     val selScale by animateFloatAsState(
-        targetValue = if (selected) 1.22f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        targetValue = if (selected) 1.34f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "sel$index"
     )
+    val shockwave = remember { Animatable(0f) }
+    LaunchedEffect(selected) {
+        if (selected) {
+            shockwave.snapTo(0f)
+            shockwave.animateTo(1f, tween(640, easing = FastOutSlowInEasing))
+        } else {
+            shockwave.snapTo(0f)
+        }
+    }
 
     Column(
         modifier = modifier
             .graphicsLayer {
-                alpha = entrance
-                scaleX = 0.7f + 0.3f * entrance
-                scaleY = 0.7f + 0.3f * entrance
+                alpha = entrance.coerceIn(0f, 1f)
+                val sc = 0.5f + 0.5f * entrance
+                scaleX = sc
+                scaleY = sc
             }
             .clip(RoundedCornerShape(18.dp))
-            .background(if (selected) UnovColors.Accent.copy(alpha = 0.14f) else UnovColors.Surface)
+            .background(if (selected) UnovColors.Accent.copy(alpha = 0.16f) else UnovColors.Surface)
             .border(
                 1.dp,
                 if (selected) UnovColors.Accent else UnovColors.Line,
@@ -288,29 +351,52 @@ private fun GiftTile(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
-            modifier = Modifier.size(50.dp),
+            modifier = Modifier.size(64.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Glow doré derrière le sticker
+            // Onde de choc à la sélection (anneau or qui s'étend et s'efface).
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val p = shockwave.value
+                if (p in 0.001f..0.999f) {
+                    val maxR = size.minDimension / 2f
+                    drawCircle(
+                        color = UnovColors.Accent.copy(alpha = (1f - p) * 0.7f),
+                        radius = maxR * (0.45f + p * 0.95f),
+                        style = Stroke(width = 2.dp.toPx())
+                    )
+                }
+            }
+
+            // Glow doré pulsant.
             Box(
                 modifier = Modifier
-                    .size(46.dp)
+                    .size(52.dp)
+                    .graphicsLayer { alpha = if (selected) 1f else glowPulse }
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
                             listOf(
-                                UnovColors.Accent.copy(alpha = if (selected) 0.45f else 0.16f),
+                                UnovColors.Accent.copy(alpha = if (selected) 0.5f else 0.18f),
                                 Color.Transparent
                             )
                         )
                     )
             )
+
+            // Étincelles scintillantes autour du sticker.
+            Sparkle(offsetX = (-20).dp, offsetY = (-16).dp, phaseMs = index * 90)
+            Sparkle(offsetX = 19.dp, offsetY = (-18).dp, phaseMs = 220 + index * 90)
+            Sparkle(offsetX = (-18).dp, offsetY = 17.dp, phaseMs = 460 + index * 90)
+            Sparkle(offsetX = 20.dp, offsetY = 15.dp, phaseMs = 680 + index * 90)
+
+            // Le sticker : flottement + balancement + respiration + rebond.
             Text(
                 text = gift.emoji,
-                fontSize = 32.sp,
+                fontSize = 33.sp,
                 modifier = Modifier.graphicsLayer {
-                    translationY = -floatY * 5f
-                    val s = pulse * selScale
+                    translationY = -floatY * 6f
+                    rotationZ = sway * 5f
+                    val s = breathe * selScale
                     scaleX = s
                     scaleY = s
                 }
@@ -335,11 +421,40 @@ private fun GiftTile(
                     .background(UnovGradients.Gold)
             )
             Text(
-                text = "${gift.price} F",
+                text = "%,d".format(gift.price).replace(',', ' '),
                 color = UnovColors.Accent,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
         }
     }
+}
+
+/** Petite étincelle dorée qui scintille (apparition/disparition + léger scale), déphasée. */
+@Composable
+private fun Sparkle(offsetX: Dp, offsetY: Dp, phaseMs: Int) {
+    val inf = rememberInfiniteTransition(label = "sparkle")
+    val a by inf.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            tween(1100, easing = FastOutSlowInEasing),
+            RepeatMode.Reverse,
+            initialStartOffset = StartOffset(phaseMs)
+        ),
+        label = "sparkleA"
+    )
+    Text(
+        text = "✦",
+        color = UnovColors.Accent,
+        fontSize = 9.sp,
+        modifier = Modifier
+            .offset(x = offsetX, y = offsetY)
+            .graphicsLayer {
+                alpha = a
+                val s = 0.5f + a * 0.7f
+                scaleX = s
+                scaleY = s
+            }
+    )
 }

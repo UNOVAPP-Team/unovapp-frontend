@@ -45,6 +45,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -92,8 +94,12 @@ private val PACKS = listOf(
 private val SuccessGreen = Color(0xFF4ADE80)
 
 @Composable
-fun WalletScreen(onClose: () -> Unit) {
+fun WalletScreen(
+    onClose: () -> Unit,
+    walletViewModel: WalletViewModel = hiltViewModel()
+) {
     UnovAppTheme {
+        val balance by walletViewModel.balance.collectAsStateWithLifecycle()
         var step by remember { mutableStateOf(WalletStep.Packs) }
         var selectedPackIdx by remember { mutableIntStateOf(1) } // 500 jetons par défaut (popular)
         var provider by remember { mutableStateOf(Provider.Mtn) }
@@ -104,6 +110,8 @@ fun WalletScreen(onClose: () -> Unit) {
         LaunchedEffect(step, processing) {
             if (step == WalletStep.Confirm && processing) {
                 delay(1600)
+                // Recharge réussie → on crédite les jetons sur le solde partagé.
+                walletViewModel.credit(PACKS[selectedPackIdx].coins.toLong())
                 step = WalletStep.Success
                 processing = false
             }
@@ -126,6 +134,7 @@ fun WalletScreen(onClose: () -> Unit) {
             ) { current ->
                 when (current) {
                     WalletStep.Packs -> PacksStep(
+                        balance = balance,
                         selectedIdx = selectedPackIdx,
                         onSelect = { selectedPackIdx = it },
                         provider = provider,
@@ -155,6 +164,7 @@ fun WalletScreen(onClose: () -> Unit) {
 
 @Composable
 private fun PacksStep(
+    balance: Long,
     selectedIdx: Int,
     onSelect: (Int) -> Unit,
     provider: Provider,
@@ -186,7 +196,7 @@ private fun PacksStep(
         }
 
         // Solde courant pill
-        BalanceCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+        BalanceCard(balance = balance, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
 
         Text(
             text = "CHOISIS UN PACK",
@@ -268,12 +278,10 @@ private fun PacksStep(
 }
 
 @Composable
-private fun BalanceCard(modifier: Modifier = Modifier) {
-    // Count-up sur le solde — démarre à 0 et compte jusqu'à 1240 en 1.4s. Donne le
-    // sentiment "le solde s'affiche" au lieu d'apparaître brut. À brancher sur le vrai
-    // solde quand le wallet API sera là (`GET /wallet`).
-    val animatedCoins = rememberCountUp(targetValue = 1240, durationMs = 1400)
-    val animatedFcfa = rememberCountUp(targetValue = 6200, durationMs = 1400)
+private fun BalanceCard(balance: Long, modifier: Modifier = Modifier) {
+    // Count-up sur le solde réel (jetons). Le FCFA est estimé (~5 FCFA / jeton).
+    val animatedCoins = rememberCountUp(targetValue = balance.toInt(), durationMs = 1400)
+    val animatedFcfa = rememberCountUp(targetValue = (balance * 5).toInt(), durationMs = 1400)
     Row(
         modifier = modifier
             .fillMaxWidth()

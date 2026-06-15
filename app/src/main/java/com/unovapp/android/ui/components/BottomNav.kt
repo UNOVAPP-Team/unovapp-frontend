@@ -2,6 +2,9 @@ package com.unovapp.android.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -45,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.annotation.StringRes
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -80,115 +84,89 @@ fun BottomNav(
     onCreate: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .background(Color(0xFF050505))
-            .border(width = 1.dp, color = UnovColors.Line, shape = RoundedCornerShape(0.dp))
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .height(68.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly
+            .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 12.dp)
     ) {
-        NavItem(tab = MainTab.Feed, active = active, onClick = onTabChange)
-        NavItem(tab = MainTab.Search, active = active, onClick = onTabChange)
-        CreateButton(onClick = onCreate)
-        NavItem(tab = MainTab.Inbox, active = active, onClick = onTabChange)
-        NavItem(tab = MainTab.Profile, active = active, onClick = onTabChange)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
+                .shadow(18.dp, RoundedCornerShape(30.dp), clip = false)
+                .clip(RoundedCornerShape(30.dp))
+                .background(
+                    Brush.verticalGradient(listOf(Color(0xFF1D1D1F), Color(0xFF0C0C0C)))
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(30.dp))
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            NavPill(tab = MainTab.Feed, active = active, onClick = onTabChange)
+            NavPill(tab = MainTab.Search, active = active, onClick = onTabChange)
+            CreateButton(onClick = onCreate)
+            NavPill(tab = MainTab.Inbox, active = active, onClick = onTabChange)
+            NavPill(tab = MainTab.Profile, active = active, onClick = onTabChange)
+        }
     }
 }
 
+/**
+ * Onglet "expressive" : au repos = icône seule ; actif = pilule dorée qui s'étend (morph fluide
+ * via animateContentSize) pour révéler le label. Tint + fond animés, pop tactile au press.
+ */
 @Composable
-private fun NavItem(
+private fun NavPill(
     tab: MainTab,
     active: MainTab,
     onClick: (MainTab) -> Unit
 ) {
     val isActive = tab == active
+    val label = stringResource(tab.labelRes)
 
     val tint by animateColorAsState(
         targetValue = if (isActive) UnovColors.Accent else UnovColors.TextMute,
         animationSpec = UnovMotion.standard(),
         label = "navTint"
     )
-    // Icon pop spring quand l'onglet devient actif — donne du poids physique au switch.
-    val iconScale by animateFloatAsState(
-        targetValue = if (isActive) 1.12f else 1f,
-        animationSpec = UnovMotion.bouncy(),
-        label = "navIconScale"
+    val bg by animateColorAsState(
+        targetValue = if (isActive) UnovColors.Accent.copy(alpha = 0.15f) else Color.Transparent,
+        animationSpec = UnovMotion.standard(),
+        label = "navBg"
     )
 
-    Column(
+    Row(
         modifier = Modifier
-            .width(58.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .unovTap(onClick = { onClick(tab) }, pressedScale = 0.92f)
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        // Stack : halo or flouté derrière + icône au-dessus
-        Box(contentAlignment = Alignment.Center) {
-            // Halo radial visible uniquement sur l'item actif (anim entry/exit).
-            // FQN obligatoire pour désambigüer avec ColumnScope.AnimatedVisibility héritée.
-            androidx.compose.animation.AnimatedVisibility(
-                visible = isActive,
-                enter = fadeIn(UnovMotion.standard()) + scaleIn(
-                    initialScale = 0.5f,
-                    animationSpec = UnovMotion.bouncy()
-                ),
-                exit = fadeOut(UnovMotion.fast()) + scaleOut(
-                    targetScale = 0.6f,
-                    animationSpec = UnovMotion.snappy()
+            .clip(RoundedCornerShape(999.dp))
+            .background(bg)
+            .unovTap(onClick = { onClick(tab) }, pressedScale = 0.9f)
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = 0.72f,
+                    stiffness = Spring.StiffnessMediumLow
                 )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .blur(14.dp)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(
-                                    UnovColors.Accent.copy(alpha = 0.55f),
-                                    Color.Transparent
-                                )
-                            ),
-                            shape = CircleShape
-                        )
-                )
-            }
-            val label = stringResource(tab.labelRes)
-            Icon(
-                imageVector = tab.icon,
-                contentDescription = label,
-                tint = tint,
-                modifier = Modifier
-                    .size(22.dp)
-                    .scale(iconScale)
             )
-        }
-
-        Text(
-            text = stringResource(tab.labelRes),
-            color = tint,
-            fontSize = 9.sp,
-            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
-            letterSpacing = 0.4.sp
+            .padding(horizontal = if (isActive) 14.dp else 11.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = tab.icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(22.dp)
         )
-
-        // Indicator bar : spring scale-in (effet "magnetic" — l'élu pop sous l'icône)
-        AnimatedVisibility(
-            visible = isActive,
-            enter = scaleIn(initialScale = 0.4f, animationSpec = UnovMotion.bouncy()) +
-                fadeIn(UnovMotion.fast()),
-            exit = scaleOut(targetScale = 0.4f, animationSpec = UnovMotion.snappy()) +
-                fadeOut(UnovMotion.fast())
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(width = 18.dp, height = 2.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(UnovGradients.Gold)
+        if (isActive) {
+            Text(
+                text = label,
+                color = tint,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.2.sp,
+                maxLines = 1
             )
         }
     }

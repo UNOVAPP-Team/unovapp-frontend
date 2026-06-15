@@ -6,6 +6,10 @@ import com.unovapp.android.data.auth.AuthRepositoryImpl
 import com.unovapp.android.data.auth.AuthRepositoryStub
 import com.unovapp.android.data.network.AuthInterceptor
 import com.unovapp.android.data.network.RetryInterceptor
+import com.unovapp.android.data.network.TokenAuthenticator
+import com.unovapp.android.data.social.SocialApi
+import com.unovapp.android.data.social.SocialRepository
+import com.unovapp.android.data.social.SocialRepositoryImpl
 import com.unovapp.android.data.user.UserApi
 import com.unovapp.android.data.user.UserRepository
 import com.unovapp.android.data.user.UserRepositoryImpl
@@ -38,6 +42,8 @@ object NetworkModule {
             .addInterceptor(AuthInterceptor(tokenStore))
             .addInterceptor(RetryInterceptor(maxAttempts = 3, baseDelayMs = 400L))
             .addInterceptor(HttpLoggingInterceptor().apply { level = loggingLevel })
+            // Rafraîchit automatiquement le token sur 401 puis rejoue la requête.
+            .authenticator(TokenAuthenticator(tokenStore))
             // Render free tier : cold start ~30–90 s. On laisse le temps au backend
             // de se réveiller avant de jeter l'éponge.
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -75,6 +81,22 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideUserRepository(api: UserApi): UserRepository = UserRepositoryImpl(api)
+
+    // --- Service Social (3e Retrofit, même OkHttpClient → Bearer + refresh partagés) ---
+
+    @Provides
+    @Singleton
+    fun provideSocialApi(okHttpClient: OkHttpClient): SocialApi =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.SOCIAL_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(SocialApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideSocialRepository(api: SocialApi): SocialRepository = SocialRepositoryImpl(api)
 
     @Provides
     @Singleton

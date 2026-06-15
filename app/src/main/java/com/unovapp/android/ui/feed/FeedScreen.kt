@@ -45,8 +45,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.unovapp.android.ui.comments.CommentsSheet
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.ui.wallet.WalletViewModel
 
 private enum class FeedTab(val label: String) {
     ForYou("Pour Toi"),
@@ -59,6 +62,8 @@ fun FeedScreen(
     onOpenWallet: () -> Unit = {}
 ) {
     val videos = remember { MockFeedVideos }
+    val walletViewModel: WalletViewModel = hiltViewModel()
+    val jetonBalance by walletViewModel.balance.collectAsStateWithLifecycle()
     val pagerState = rememberPagerState(pageCount = { videos.size })
     var tab by rememberSaveable { mutableStateOf(FeedTab.ForYou) }
     var commentsForVideoId by remember { mutableStateOf<String?>(null) }
@@ -112,10 +117,17 @@ fun FeedScreen(
 
     if (giftSheetOpen) {
         GiftSheet(
+            balance = jetonBalance,
             onDismiss = { giftSheetOpen = false },
-            onSelectGift = {
+            onSend = { gift ->
+                // Solde suffisant : on débite les jetons (paiement) et on ferme.
+                walletViewModel.trySpend(gift.price.toLong())
                 giftSheetOpen = false
-                onOpenWallet() // → écran de paiement (Wallet/Mobile Money)
+            },
+            onRecharge = {
+                // Solde insuffisant : redirection vers l'écran de recharge.
+                giftSheetOpen = false
+                onOpenWallet()
             }
         )
     }
@@ -146,23 +158,32 @@ private fun FeedHeader(
             )
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 16.dp)
         ) {
-            NetworkQualityChip(
-                quality = networkQuality,
-                ecoActive = ecoActive,
-                onClick = onToggleEco
-            )
-            TabsRow(tab = tab, onTabChange = onTabChange)
-            HeaderActions(
-                muted = muted,
-                onToggleMute = onToggleMute
-            )
+            // Puce réseau/éco compacte à gauche
+            Box(modifier = Modifier.align(Alignment.CenterStart)) {
+                NetworkQualityChip(
+                    quality = networkQuality,
+                    ecoActive = ecoActive,
+                    onClick = onToggleEco
+                )
+            }
+            // Onglets vraiment centrés
+            Box(modifier = Modifier.align(Alignment.Center)) {
+                TabsRow(tab = tab, onTabChange = onTabChange)
+            }
+            // Un seul bouton à droite : le son (recherche/notifs retirés → déjà dans la nav)
+            Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                HeaderIconButton(
+                    icon = if (muted) Icons.AutoMirrored.Outlined.VolumeOff
+                    else Icons.AutoMirrored.Outlined.VolumeUp,
+                    contentDescription = if (muted) "Activer le son" else "Couper le son",
+                    onClick = onToggleMute
+                )
+            }
         }
     }
 }
@@ -205,31 +226,6 @@ private fun TabItem(label: String, isActive: Boolean, onClick: () -> Unit) {
                     .background(UnovColors.Accent)
             )
         }
-    }
-}
-
-@Composable
-private fun HeaderActions(muted: Boolean, onToggleMute: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        HeaderIconButton(
-            icon = if (muted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp,
-            contentDescription = if (muted) "Activer le son" else "Couper le son",
-            onClick = onToggleMute
-        )
-        HeaderIconButton(
-            icon = Icons.Outlined.Search,
-            contentDescription = "Recherche",
-            onClick = {}
-        )
-        HeaderIconButton(
-            icon = Icons.Outlined.NotificationsNone,
-            contentDescription = "Notifications",
-            badge = "3",
-            onClick = {}
-        )
     }
 }
 

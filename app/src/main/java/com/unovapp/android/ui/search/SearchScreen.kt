@@ -37,6 +37,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,6 +57,13 @@ import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.theme.UnovAppTheme
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.data.user.UserSummaryDto
+import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.EmptyState
+import com.unovapp.android.ui.components.ErrorRetry
+import com.unovapp.android.ui.components.ShimmerBox
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.Close
 import com.unovapp.android.ui.theme.UnovGradients
 import com.unovapp.android.ui.theme.UnovMotion
 import kotlinx.coroutines.delay
@@ -81,9 +94,14 @@ private val MOCK_VIDEOS = listOf(
 )
 
 @Composable
-fun SearchScreen(contentPadding: PaddingValues = PaddingValues(0.dp)) {
+fun SearchScreen(
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    viewModel: SearchViewModel = hiltViewModel()
+) {
     UnovAppTheme {
         var activeCategory by remember { mutableStateOf(CATEGORIES.first()) }
+        val s by viewModel.state.collectAsStateWithLifecycle()
+        val searching = s.query.isNotBlank()
 
         Column(
             modifier = Modifier
@@ -92,23 +110,120 @@ fun SearchScreen(contentPadding: PaddingValues = PaddingValues(0.dp)) {
                 .padding(contentPadding)
         ) {
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp)) {
-                SearchBar()
-                Spacer(modifier = Modifier.height(14.dp))
-                CategoryPills(
-                    active = activeCategory,
-                    onSelect = { activeCategory = it }
-                )
+                SearchBar(query = s.query, onQueryChange = viewModel::onQueryChange)
+                if (!searching) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    CategoryPills(
+                        active = activeCategory,
+                        onSelect = { activeCategory = it }
+                    )
+                }
             }
 
-            LazyColumn(
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp)
-            ) {
-                item { SectionHeader(icon = Icons.AutoMirrored.Outlined.TrendingUp, label = "Tendances Bénin") }
-                item { TrendingGrid(tags = MOCK_TRENDING) }
-                item { Spacer(modifier = Modifier.height(22.dp)) }
-                item { SectionHeader(icon = null, label = "Vidéos populaires") }
-                item { VideoGrid(videos = MOCK_VIDEOS) }
+            if (searching) {
+                UserSearchResults(
+                    state = s,
+                    onToggleFollow = viewModel::toggleFollow,
+                    onRetry = { viewModel.onQueryChange(s.query) }
+                )
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp)
+                ) {
+                    item { SectionHeader(icon = Icons.AutoMirrored.Outlined.TrendingUp, label = "Tendances Bénin") }
+                    item { TrendingGrid(tags = MOCK_TRENDING) }
+                    item { Spacer(modifier = Modifier.height(22.dp)) }
+                    item { SectionHeader(icon = null, label = "Vidéos populaires") }
+                    item { VideoGrid(videos = MOCK_VIDEOS) }
+                }
             }
+        }
+    }
+}
+
+/* ---------- Résultats de recherche utilisateurs (réels) ---------- */
+
+@Composable
+private fun UserSearchResults(
+    state: SearchUiState,
+    onToggleFollow: (String) -> Unit,
+    onRetry: () -> Unit
+) {
+    when {
+        state.loading && state.results.isEmpty() -> {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                repeat(6) {
+                    ShimmerBox(
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                }
+            }
+        }
+        state.error != null && state.results.isEmpty() ->
+            ErrorRetry(message = "Recherche impossible.\n${state.error}", onRetry = onRetry)
+        state.results.isEmpty() ->
+            EmptyState(title = "Aucun utilisateur", subtitle = "Aucun résultat pour « ${state.query} »")
+        else -> LazyColumn(
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(state.results) { user ->
+                UserResultRow(
+                    user = user,
+                    following = state.followingIds.contains(user.id),
+                    onFollow = { onToggleFollow(user.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserResultRow(user: UserSummaryDto, following: Boolean, onFollow: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(UnovColors.Surface)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Avatar(idx = kotlin.math.abs(user.id.hashCode()) % 6, name = user.username, size = 44.dp)
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("@${user.username}", color = UnovColors.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                if (user.isVerified) {
+                    Icon(Icons.Filled.Verified, contentDescription = "Vérifié", tint = UnovColors.Accent, modifier = Modifier.size(13.dp))
+                }
+            }
+            if (!user.displayName.isNullOrBlank()) {
+                Text(user.displayName, color = UnovColors.TextMute, fontSize = 12.sp)
+            }
+        }
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .then(
+                    if (following) Modifier.border(1.dp, UnovColors.LineStrong, RoundedCornerShape(999.dp))
+                    else Modifier.background(UnovGradients.Gold)
+                )
+                .unovTap(onClick = onFollow, pressedScale = 0.94f)
+                .padding(horizontal = 16.dp, vertical = 7.dp)
+        ) {
+            Text(
+                text = if (following) "Suivi" else "Suivre",
+                color = if (following) UnovColors.TextDim else Color(0xFF0D0D0D),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -116,10 +231,10 @@ fun SearchScreen(contentPadding: PaddingValues = PaddingValues(0.dp)) {
 /* ---------- SearchBar avec focus border animée ---------- */
 
 @Composable
-private fun SearchBar() {
-    var focused by remember { mutableStateOf(false) }
+private fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
+    val active = query.isNotEmpty()
     val borderColor by animateColorAsState(
-        targetValue = if (focused) UnovColors.Accent.copy(alpha = 0.7f) else UnovColors.Line,
+        targetValue = if (active) UnovColors.Accent.copy(alpha = 0.7f) else UnovColors.Line,
         animationSpec = UnovMotion.standard(),
         label = "searchBorder"
     )
@@ -129,7 +244,6 @@ private fun SearchBar() {
             .clip(RoundedCornerShape(999.dp))
             .background(UnovColors.Surface)
             .border(1.dp, borderColor, RoundedCornerShape(999.dp))
-            .unovTap(onClick = { focused = !focused }, pressedScale = 0.98f)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -137,21 +251,43 @@ private fun SearchBar() {
         Icon(
             imageVector = Icons.Outlined.Search,
             contentDescription = null,
-            tint = if (focused) UnovColors.Accent else UnovColors.Text,
+            tint = if (active) UnovColors.Accent else UnovColors.Text,
             modifier = Modifier.size(18.dp)
         )
-        Text(
-            text = "Recherche créateurs, sons, hashtags…",
-            color = UnovColors.TextMute,
-            fontSize = 14.sp,
-            modifier = Modifier.weight(1f)
-        )
-        Icon(
-            imageVector = Icons.Outlined.QrCode,
-            contentDescription = "QR",
-            tint = UnovColors.TextDim,
-            modifier = Modifier.size(18.dp)
-        )
+        Box(modifier = Modifier.weight(1f)) {
+            if (!active) {
+                Text(
+                    text = "Recherche créateurs, pseudos…",
+                    color = UnovColors.TextMute,
+                    fontSize = 14.sp
+                )
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = TextStyle(color = UnovColors.Text, fontSize = 14.sp),
+                cursorBrush = SolidColor(UnovColors.Accent),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        if (active) {
+            Icon(
+                imageVector = Icons.Outlined.Close,
+                contentDescription = "Effacer",
+                tint = UnovColors.TextDim,
+                modifier = Modifier
+                    .size(18.dp)
+                    .unovTap(onClick = { onQueryChange("") }, pressedScale = 0.9f)
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.QrCode,
+                contentDescription = "QR",
+                tint = UnovColors.TextDim,
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 

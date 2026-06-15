@@ -3,6 +3,7 @@ package com.unovapp.android.ui.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.unovapp.android.data.auth.AuthRepository
+import com.unovapp.android.data.network.ApiError
 import com.unovapp.android.data.network.NetworkResult
 import com.unovapp.android.data.user.UserProfileDto
 import com.unovapp.android.data.user.UserRepository
@@ -18,7 +19,9 @@ import javax.inject.Inject
 data class ProfileNetworkState(
     val isLoading: Boolean = true,
     val profile: UserProfileDto? = null,
-    val error: String? = null
+    val error: String? = null,
+    /** Session invalide/expirée (401) → l'UI doit rediriger vers la connexion. */
+    val sessionExpired: Boolean = false
 )
 
 @HiltViewModel
@@ -38,8 +41,15 @@ class ProfileViewModel @Inject constructor(
             when (val r = userRepository.fetchMe()) {
                 is NetworkResult.Success ->
                     _state.update { it.copy(isLoading = false, profile = r.data, error = null) }
-                is NetworkResult.Failure ->
-                    _state.update { it.copy(isLoading = false, error = r.error.debugDetail) }
+                is NetworkResult.Failure -> {
+                    if (r.error is ApiError.Unauthorized) {
+                        // Token absent/expiré et refresh impossible → on repart proprement au login.
+                        authRepository.clearSession()
+                        _state.update { it.copy(isLoading = false, sessionExpired = true) }
+                    } else {
+                        _state.update { it.copy(isLoading = false, error = r.error.debugDetail) }
+                    }
+                }
             }
         }
     }

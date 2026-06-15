@@ -184,6 +184,12 @@ fun ProfileScreen(
 ) {
     UnovAppTheme {
         val net by viewModel.state.collectAsStateWithLifecycle()
+
+        // Session expirée/invalide (401) → on renvoie vers la connexion.
+        androidx.compose.runtime.LaunchedEffect(net.sessionExpired) {
+            if (net.sessionExpired) onLoggedOut()
+        }
+
         // Données réelles (/users/me) fusionnées dans l'état d'affichage.
         // Les sections riches (battles, top fans, grille…) restent mockées tant que
         // le backend ne les expose pas.
