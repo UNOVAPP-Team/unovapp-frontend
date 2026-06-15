@@ -98,6 +98,10 @@ fun VideoPlayer(
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
             }
-        }
+        },
+        // Empêche la mise en veille de l'écran pendant la lecture (comme TikTok).
+        // keepScreenOn ne maintient l'écran allumé que tant que la vidéo joue ;
+        // en pause / hors page courante, le téléphone peut s'éteindre normalement.
+        update = { view -> view.keepScreenOn = isPlaying }
     )
 }
