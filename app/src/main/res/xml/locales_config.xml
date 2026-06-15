@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Per-app language config (Android 13+) — pour les versions inférieures, AppCompatDelegate
+  prend le relais. Liste exhaustive des langues que l'app supporte.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Français (défaut) -->
+    <locale android:name="fr"/>
+    <!-- Fon (gbe) — langue majoritaire au sud Bénin -->
+    <locale android:name="fon"/>
+    <!-- Yoruba — Bénin, Nigeria, Togo -->
+    <locale android:name="yo"/>
+</locale-config>

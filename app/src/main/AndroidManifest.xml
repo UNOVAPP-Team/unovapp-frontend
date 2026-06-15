@@ -3,7 +3,10 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:name=".UnovApp"
-        android:label="UnovApp"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.UnovApp.Splash">
         <activity
             android:name=".MainActivity"
@@ -11,6 +14,27 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- Deep link de vérification email (lien https du backend).
+                 autoVerify requiert un assetlinks.json hébergé sur le domaine backend
+                 pour ouvrir l'app sans dialogue. Sinon Android propose un choix app/navigateur. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="unovapp-auth.onrender.com"
+                    android:pathPrefix="/api/v1/auth/verify-email"/>
+            </intent-filter>
+
+            <!-- Schéma custom (si le backend met un lien `unovapp://verify-email?token=...`). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="unovapp" android:host="verify-email"/>
             </intent-filter>
         </activity>
     </application>

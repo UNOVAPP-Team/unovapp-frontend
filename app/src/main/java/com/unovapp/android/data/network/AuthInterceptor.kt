@@ -1,15 +1,13 @@
 package com.unovapp.android.data.network
 
 import com.unovapp.android.TokenDataStore
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 
 /**
  * Ajoute `Authorization: Bearer <jwt>` à toutes les requêtes sortantes — sauf les routes
- * d'auth publiques (`/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/google`)
- * qui sont explicitement exclues.
+ * d'auth publiques (login, register, refresh, send-otp) qui ne nécessitent pas de token.
  */
 class AuthInterceptor(
     private val tokenStore: TokenDataStore
@@ -23,7 +21,7 @@ class AuthInterceptor(
             return chain.proceed(original)
         }
 
-        val token = runBlocking { tokenStore.getToken().firstOrNull() }
+        val token = runBlocking { tokenStore.readAccessToken() }
         val request = if (token != null) {
             original.newBuilder()
                 .header("Authorization", "Bearer $token")
@@ -38,9 +36,7 @@ class AuthInterceptor(
             "/auth/login",
             "/auth/register",
             "/auth/refresh",
-            "/auth/google",
-            "/auth/otp/send",
-            "/auth/otp/verify"
+            "/auth/send-otp"
         )
     }
 }

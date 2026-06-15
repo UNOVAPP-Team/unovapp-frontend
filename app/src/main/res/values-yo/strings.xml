@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Yorùbá — TODO: validation par locuteur natif (Nigeria/Bénin/Togo).
+  Diacritiques préservés (à̀ é í ó ú ẹ ọ ṣ).
+  Termes techniques (Email, MoMo, Moov) gardés en l'état — sont déjà des emprunts.
+-->
+<resources>
+    <string name="app_name">UNOVAPP</string>
+
+    <!-- BottomNav -->
+    <string name="nav_feed">Ìjì</string>
+    <string name="nav_search">Wáàwá</string>
+    <string name="nav_inbox">Àkójọpọ̀</string>
+    <string name="nav_profile">Àpèjúwe</string>
+    <string name="nav_create">Ṣẹ̀dá</string>
+
+    <!-- Welcome -->
+    <string name="welcome_title">Káàbọ̀ sí\nUNOVAPP.</string>
+    <string name="welcome_subtitle">Ètò fídíò tí a ṣe fún Áfríkà. Wọlé láti tẹ̀síwájú, tàbí ṣẹ̀dá àkọọlẹ̀ rẹ ní ìṣẹ́jú kan.</string>
+    <string name="welcome_register_title">Ṣẹ̀dá àkọọlẹ̀ mi</string>
+    <string name="welcome_register_sub">Tuntun níbí · Ìforúkọsílẹ̀ ní 30 ìṣẹ́jú-àáyá</string>
+    <string name="welcome_login_title">Wọlé</string>
+    <string name="welcome_login_sub">Tí o ti ní àkọọlẹ̀ · Email + ọ̀rọ̀ àṣẹ</string>
+    <string name="welcome_soon">LÁÌPẸ́</string>
+    <string name="welcome_security">À FI Ẹ̀WỌ̀N HÁ · MOMO &amp; MOOV ṢETÁN</string>
+
+    <!-- Auth Form -->
+    <string name="auth_eyebrow_register">ÌFORÚKỌSÍLẸ̀</string>
+    <string name="auth_eyebrow_login">ÌWỌ̀LÉ</string>
+    <string name="auth_title_register">Àkọọlẹ̀ rẹ,\nní àlàyé díẹ̀.</string>
+    <string name="auth_title_login">Inú mi dùn pé\no padà.</string>
+    <string name="auth_sub_register">Email láti wọlé, orúkọ-àpèjúwe láti gbajúmọ̀, ọ̀rọ̀ àṣẹ láti dáàbò bò ọ́.</string>
+    <string name="auth_sub_login">Tẹ́ email àti ọ̀rọ̀ àṣẹ rẹ láti tẹ̀síwájú.</string>
+    <string name="auth_label_email">EMAIL</string>
+    <string name="auth_label_username">ORÚKỌ-ÀPÈJÚWE</string>
+    <string name="auth_label_password">Ọ̀RỌ̀ ÀṢẸ</string>
+    <string name="auth_label_phone">NỌ́MBÀ TẸLIFÓÒNÙ</string>
+    <string name="auth_placeholder_email">email.rẹ@apẹrẹ.com</string>
+    <string name="auth_placeholder_username">akossi_creator</string>
+    <string name="auth_placeholder_password">Ó kéré tán létà 8</string>
+    <string name="auth_phone_hint">A ó fi SMS ránṣẹ́ sí ọ láti ṣe ìjẹ́rìí — kò ṣe pàtàkì.</string>
+    <string name="auth_already">O ti ní àkọọlẹ̀ tẹ́lẹ̀?</string>
+    <string name="auth_not_yet">O kò tíì forúkọsílẹ̀?</string>
+    <string name="auth_cta_register">Ṣẹ̀dá àkọọlẹ̀ mi</string>
+    <string name="auth_cta_login">Wọlé</string>
+
+    <!-- Erreurs -->
+    <string name="auth_err_email">Email kò tọ́.</string>
+    <string name="auth_err_password">Ọ̀rọ̀ àṣẹ kúrú jù (létà 8+).</string>
+    <string name="auth_err_username">Orúkọ-àpèjúwe láàrin létà 3 sí 20.</string>
+
+    <!-- OTP -->
+    <string name="otp_eyebrow">ÌJẸ́RÌÍ</string>
+    <string name="otp_title">A ti fi kóòdù\nónkà 6 ránṣẹ́ sí ọ.</string>
+    <string name="otp_cta">Ṣàyẹ̀wò</string>
+    <string name="otp_resend">Fi kóòdù náà ránṣẹ́ pẹ̀lú</string>
+    <string name="otp_skip">Fò lulẹ̀ fún ìsinsìnyí</string>
+
+    <!-- Success -->
+    <string name="auth_success_title">Káàbọ̀.</string>
+    <string name="auth_success_sub">Àkọọlẹ̀ rẹ ti ṣetán. A ó mú ọ lọ sí ìjì lẹ́sẹ̀kẹsẹ̀.</string>
+
+    <!-- Feed -->
+    <string name="feed_tab_for_you">Fún Ọ</string>
+    <string name="feed_tab_following">Tí O Tẹ̀lé</string>
+    <string name="feed_trending">GBAJÚMỌ̀</string>
+    <string name="feed_challenge">ÌPENÌJÀ</string>
+    <string name="feed_follow">Tẹ̀lé</string>
+    <string name="feed_gift">Ẹ̀bùn</string>
+    <string name="feed_sound_original">Ohùn ìpilẹ̀ṣẹ̀</string>
+
+    <!-- Profile -->
+    <string name="profile_distinctions">Àwọn ọlá</string>
+    <string name="profile_series">Ìran</string>
+    <string name="profile_top_fans">Olùfẹ́ jùlọ</string>
+    <string name="profile_recent_battles">Ìjà tuntun</string>
+    <string name="profile_live">NÍ TÁÀRÀ</string>
+
+    <!-- Langue -->
+    <string name="lang_title">Èdè</string>
+    <string name="lang_sub">Yan èdè ìfihàn rẹ.</string>
+    <string name="lang_fr">Fáránsé</string>
+    <string name="lang_fon">Fɔngbè</string>
+    <string name="lang_yo">Yorùbá</string>
+    <string name="lang_short_fr">FR</string>
+    <string name="lang_short_fon">FON</string>
+    <string name="lang_short_yo">YO</string>
+</resources>

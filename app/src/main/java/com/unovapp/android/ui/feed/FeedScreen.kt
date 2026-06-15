@@ -3,12 +3,6 @@
 package com.unovapp.android.ui.feed
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +25,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
@@ -40,10 +35,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,8 +60,15 @@ fun FeedScreen(
 ) {
     val videos = remember { MockFeedVideos }
     val pagerState = rememberPagerState(pageCount = { videos.size })
-    var tab by remember { mutableStateOf(FeedTab.ForYou) }
+    var tab by rememberSaveable { mutableStateOf(FeedTab.ForYou) }
     var commentsForVideoId by remember { mutableStateOf<String?>(null) }
+    var giftSheetOpen by remember { mutableStateOf(false) }
+
+    // État de session — partagé entre toutes les pages du feed (comportement attendu sur TikTok).
+    var muted by rememberSaveable { mutableStateOf(true) }
+    var ecoActive by rememberSaveable { mutableStateOf(true) }
+    // TODO: brancher sur ConnectivityManager dès que le module monitoring sera prêt.
+    val networkQuality = remember { NetworkQuality.G3 }
 
     Box(
         modifier = Modifier
@@ -79,15 +83,21 @@ fun FeedScreen(
             FeedItem(
                 video = videos[page],
                 isCurrentPage = page == pagerState.currentPage,
+                muted = muted,
                 onCommentClick = { commentsForVideoId = videos[page].id },
-                onGiftClick = onOpenWallet
+                onGiftClick = { giftSheetOpen = true },
+                onChallengeClick = { /* TODO: ouvrir création Battle */ }
             )
         }
 
-        // Top translucent header with tabs
         FeedHeader(
             tab = tab,
             onTabChange = { tab = it },
+            networkQuality = networkQuality,
+            ecoActive = ecoActive,
+            onToggleEco = { ecoActive = !ecoActive },
+            muted = muted,
+            onToggleMute = { muted = !muted },
             modifier = Modifier.align(Alignment.TopCenter)
         )
     }
@@ -99,83 +109,68 @@ fun FeedScreen(
             onDismiss = { commentsForVideoId = null }
         )
     }
+
+    if (giftSheetOpen) {
+        GiftSheet(
+            onDismiss = { giftSheetOpen = false },
+            onSelectGift = {
+                giftSheetOpen = false
+                onOpenWallet() // → écran de paiement (Wallet/Mobile Money)
+            }
+        )
+    }
 }
+
+/* ---------- Header ---------- */
 
 @Composable
 private fun FeedHeader(
     tab: FeedTab,
     onTabChange: (FeedTab) -> Unit,
+    networkQuality: NetworkQuality,
+    ecoActive: Boolean,
+    onToggleEco: () -> Unit,
+    muted: Boolean,
+    onToggleMute: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Gradient noir → transparent — pas de carré opaque, juste un fade pour la lisibilité.
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF141414).copy(alpha = 0.82f))
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0.55f),
+                    1f to Color.Transparent
+                )
+            )
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .align(Alignment.BottomCenter)
-                .background(UnovColors.Accent.copy(alpha = 0.05f))
-        )
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 10.dp),
+                .padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            HdChip()
+            NetworkQualityChip(
+                quality = networkQuality,
+                ecoActive = ecoActive,
+                onClick = onToggleEco
+            )
             TabsRow(tab = tab, onTabChange = onTabChange)
-            HeaderActions()
+            HeaderActions(
+                muted = muted,
+                onToggleMute = onToggleMute
+            )
         }
     }
 }
 
 @Composable
-private fun HdChip() {
-    val transition = rememberInfiniteTransition(label = "hdPulse")
-    val alpha by transition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1100, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "hdAlpha"
-    )
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(UnovColors.Accent.copy(alpha = 0.08f))
-            .border(1.dp, UnovColors.Accent.copy(alpha = 0.20f), RoundedCornerShape(999.dp))
-            .padding(horizontal = 9.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(5.dp)
-                .clip(CircleShape)
-                .background(UnovColors.Accent.copy(alpha = alpha))
-        )
-        Text(
-            text = "HD · ÉCO",
-            color = UnovColors.Accent,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.0.sp
-        )
-    }
-}
-
-@Composable
 private fun TabsRow(tab: FeedTab, onTabChange: (FeedTab) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        FeedTab.values().reversed().forEach { t ->  // "Abonnements" before "Pour Toi" visually
+    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        FeedTab.values().reversed().forEach { t ->
             TabItem(
                 label = t.label,
                 isActive = tab == t,
@@ -191,20 +186,20 @@ private fun TabItem(label: String, isActive: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clickable(interactionSource = noRipple, indication = null, onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = label,
-            color = if (isActive) Color.White else UnovColors.TextMute,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
+            color = if (isActive) Color.White else UnovColors.TextDim.copy(alpha = 0.72f),
+            fontSize = 15.sp,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium
         )
         AnimatedVisibility(visible = isActive) {
             Box(
                 modifier = Modifier
-                    .padding(top = 28.dp)
-                    .width(24.dp)
+                    .padding(top = 26.dp)
+                    .width(22.dp)
                     .height(2.dp)
                     .clip(RoundedCornerShape(999.dp))
                     .background(UnovColors.Accent)
@@ -214,13 +209,26 @@ private fun TabItem(label: String, isActive: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun HeaderActions() {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        HeaderIconButton(icon = Icons.Outlined.Search, contentDescription = "Recherche")
+private fun HeaderActions(muted: Boolean, onToggleMute: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        HeaderIconButton(
+            icon = if (muted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp,
+            contentDescription = if (muted) "Activer le son" else "Couper le son",
+            onClick = onToggleMute
+        )
+        HeaderIconButton(
+            icon = Icons.Outlined.Search,
+            contentDescription = "Recherche",
+            onClick = {}
+        )
         HeaderIconButton(
             icon = Icons.Outlined.NotificationsNone,
             contentDescription = "Notifications",
-            badge = "3"
+            badge = "3",
+            onClick = {}
         )
     }
 }
@@ -229,30 +237,30 @@ private fun HeaderActions() {
 private fun HeaderIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
+    onClick: () -> Unit,
     badge: String? = null
 ) {
     val noRipple = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(interactionSource = noRipple, indication = null) {}
-            .padding(6.dp)
+            .clip(CircleShape)
+            .clickable(interactionSource = noRipple, indication = null, onClick = onClick)
+            .padding(8.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = Color.White,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(20.dp)
         )
         if (badge != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 2.dp, end = 0.dp)
                     .size(14.dp)
                     .clip(CircleShape)
                     .background(Color(0xFFE54646))
-                    .border(2.dp, Color(0xFF141414), CircleShape),
+                    .border(2.dp, Color(0xFF050505), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(

@@ -1,10 +1,14 @@
 package com.unovapp.android.ui.main
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +29,7 @@ import com.unovapp.android.ui.inbox.InboxScreen
 import com.unovapp.android.ui.profile.ProfileScreen
 import com.unovapp.android.ui.search.SearchScreen
 import com.unovapp.android.ui.theme.UnovAppTheme
+import com.unovapp.android.ui.theme.UnovMotion
 import com.unovapp.android.ui.wallet.WalletScreen
 
 /** Overlays plein écran qui passent au-dessus du Scaffold + BottomNav. */
@@ -32,14 +37,19 @@ private enum class Overlay { Battle, Wallet }
 
 /**
  * Host post-connexion : Scaffold avec BottomNav, swap entre Feed / Search / Inbox / Profile
- * selon l'onglet courant. Battle et Wallet sont des overlays full-screen au-dessus
- * (le BottomNav reste en mémoire mais visuellement masqué).
+ * selon l'onglet courant.
+ *
+ *  - Transition entre onglets : **shared-axis horizontal**, direction selon l'index
+ *    (gauche-droite ou droite-gauche). Donne une sensation de continuité spatiale.
+ *  - Overlays (Battle, Wallet) : transitions distinctes — fade pour Battle (immersif),
+ *    slide vertical pour Wallet (façon modal qui descend).
  *
  * `rememberSaveable` sur l'onglet pour qu'il survive à la rotation et au process death.
  */
 @Composable
 fun MainScreen(
-    onOpenCreate: () -> Unit = {}
+    onOpenCreate: () -> Unit = {},
+    onLoggedOut: () -> Unit = {}
 ) {
     UnovAppTheme {
         var tab by rememberSaveable { mutableStateOf(MainTab.Feed) }
@@ -58,35 +68,56 @@ fun MainScreen(
                     )
                 }
             ) { padding ->
-                when (tab) {
-                    MainTab.Feed -> FeedScreen(
-                        contentPadding = padding,
-                        onOpenWallet = { overlay = Overlay.Wallet }
-                    )
-                    MainTab.Search -> SearchScreen(contentPadding = padding)
-                    MainTab.Inbox -> InboxScreen(contentPadding = padding)
-                    MainTab.Profile -> ProfileScreen(
-                        contentPadding = padding,
-                        onOpenBattle = { overlay = Overlay.Battle },
-                        onOpenWallet = { overlay = Overlay.Wallet }
-                    )
+                // AnimatedContent avec direction calculée — sens du slide depend de l'index
+                // (Feed→Profile = slide gauche, Profile→Feed = slide droite). Donne le repère
+                // spatial qu'on attend des bottom-nav modernes (Instagram, X).
+                AnimatedContent(
+                    targetState = tab,
+                    transitionSpec = {
+                        val forward = targetState.ordinal > initialState.ordinal
+                        val dir = if (forward) 1 else -1
+                        (slideInHorizontally(UnovMotion.decelerate()) { dir * it / 6 } +
+                            fadeIn(UnovMotion.standard()))
+                            .togetherWith(
+                                slideOutHorizontally(UnovMotion.accelerate()) { -dir * it / 6 } +
+                                    fadeOut(UnovMotion.fast())
+                            )
+                    },
+                    label = "tabContent"
+                ) { current ->
+                    when (current) {
+                        MainTab.Feed -> FeedScreen(
+                            contentPadding = padding,
+                            onOpenWallet = { overlay = Overlay.Wallet }
+                        )
+                        MainTab.Search -> SearchScreen(contentPadding = padding)
+                        MainTab.Inbox -> InboxScreen(contentPadding = padding)
+                        MainTab.Profile -> ProfileScreen(
+                            contentPadding = padding,
+                            onOpenBattle = { overlay = Overlay.Battle },
+                            onOpenWallet = { overlay = Overlay.Wallet },
+                            onLoggedOut = onLoggedOut
+                        )
+                    }
                 }
             }
 
             // Battle overlay — fade in/out (immersif, pas de slide)
             AnimatedVisibility(
                 visible = overlay == Overlay.Battle,
-                enter = fadeIn(),
-                exit = fadeOut()
+                enter = fadeIn(UnovMotion.standard()),
+                exit = fadeOut(UnovMotion.fast())
             ) {
                 BattleScreen(onClose = { overlay = null })
             }
 
-            // Wallet overlay — slide vertical (façon modal)
+            // Wallet overlay — slide vertical (façon modal qui descend)
             AnimatedVisibility(
                 visible = overlay == Overlay.Wallet,
-                enter = slideInVertically { it } + fadeIn(),
-                exit = slideOutVertically { it } + fadeOut()
+                enter = slideInVertically(UnovMotion.decelerate(UnovMotion.DurationSlow)) { it } +
+                    fadeIn(UnovMotion.standard()),
+                exit = slideOutVertically(UnovMotion.accelerate()) { it } +
+                    fadeOut(UnovMotion.fast())
             ) {
                 WalletScreen(onClose = { overlay = null })
             }

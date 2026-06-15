@@ -6,6 +6,9 @@ import com.unovapp.android.data.auth.AuthRepositoryImpl
 import com.unovapp.android.data.auth.AuthRepositoryStub
 import com.unovapp.android.data.network.AuthInterceptor
 import com.unovapp.android.data.network.RetryInterceptor
+import com.unovapp.android.data.user.UserApi
+import com.unovapp.android.data.user.UserRepository
+import com.unovapp.android.data.user.UserRepositoryImpl
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -35,9 +38,11 @@ object NetworkModule {
             .addInterceptor(AuthInterceptor(tokenStore))
             .addInterceptor(RetryInterceptor(maxAttempts = 3, baseDelayMs = 400L))
             .addInterceptor(HttpLoggingInterceptor().apply { level = loggingLevel })
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .writeTimeout(20, TimeUnit.SECONDS)
+            // Render free tier : cold start ~30–90 s. On laisse le temps au backend
+            // de se réveiller avant de jeter l'éponge.
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build()
     }
 
@@ -54,6 +59,22 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideAuthApi(retrofit: Retrofit): AuthApi = retrofit.create(AuthApi::class.java)
+
+    // --- Service User (2ᵉ Retrofit, même OkHttpClient → Bearer partagé) ---
+
+    @Provides
+    @Singleton
+    fun provideUserApi(okHttpClient: OkHttpClient): UserApi =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.USER_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(UserApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideUserRepository(api: UserApi): UserRepository = UserRepositoryImpl(api)
 
     @Provides
     @Singleton

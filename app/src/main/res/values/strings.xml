@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Strings UNOVAPP — version française (langue par défaut).
+  Les traductions Fon (values-b+fon) et Yorùbá (values-yo) doivent être validées par
+  des locuteurs natifs avant production. Voir les TODO dans chaque fichier traduit.
+-->
+<resources>
+    <string name="app_name">UNOVAPP</string>
+
+    <!-- ============== BottomNav ============== -->
+    <string name="nav_feed">Feed</string>
+    <string name="nav_search">Recherche</string>
+    <string name="nav_inbox">Inbox</string>
+    <string name="nav_profile">Profil</string>
+    <string name="nav_create">Créer</string>
+
+    <!-- ============== Onboarding / Welcome ============== -->
+    <string name="welcome_title">Bienvenue sur\nUNOVAPP.</string>
+    <string name="welcome_subtitle">La plateforme vidéo Made for Africa. Connecte-toi pour reprendre où tu en étais, ou crée ton compte en moins d\'une minute.</string>
+    <string name="welcome_register_title">Créer mon compte</string>
+    <string name="welcome_register_sub">Nouveau ici · Inscription en 30 s</string>
+    <string name="welcome_login_title">Se connecter</string>
+    <string name="welcome_login_sub">Déjà un compte · Email + mot de passe</string>
+    <string name="welcome_soon">BIENTÔT</string>
+    <string name="welcome_security">CHIFFRÉ · MOMO &amp; MOOV PRÊTS</string>
+
+    <!-- ============== Auth — Form ============== -->
+    <string name="auth_eyebrow_register">INSCRIPTION</string>
+    <string name="auth_eyebrow_login">CONNEXION</string>
+    <string name="auth_title_register">Ton compte,\nen quelques détails.</string>
+    <string name="auth_title_login">Content de te\nrevoir.</string>
+    <string name="auth_sub_register">Email pour te connecter, pseudo pour briller, mot de passe pour te protéger.</string>
+    <string name="auth_sub_login">Tape ton email et ton mot de passe pour reprendre.</string>
+    <string name="auth_label_email">EMAIL</string>
+    <string name="auth_label_username">PSEUDO</string>
+    <string name="auth_label_password">MOT DE PASSE</string>
+    <string name="auth_label_phone">NUMÉRO DE TÉLÉPHONE</string>
+    <string name="auth_placeholder_email">ton.email@example.com</string>
+    <string name="auth_placeholder_username">akossi_creator</string>
+    <string name="auth_placeholder_password">8 caractères minimum</string>
+    <string name="auth_phone_hint">On t\'enverra un SMS pour vérifier — vérification facultative.</string>
+    <string name="auth_already">Tu as déjà un compte ?</string>
+    <string name="auth_not_yet">Pas encore inscrit ?</string>
+    <string name="auth_cta_register">Créer mon compte</string>
+    <string name="auth_cta_login">Se connecter</string>
+
+    <!-- Erreurs de validation -->
+    <string name="auth_err_email">Adresse email invalide.</string>
+    <string name="auth_err_password">Mot de passe trop court (8+ caractères).</string>
+    <string name="auth_err_username">Pseudo entre 3 et 20 caractères.</string>
+
+    <!-- ============== Auth — OTP ============== -->
+    <string name="otp_eyebrow">VÉRIFICATION</string>
+    <string name="otp_title">On t\'a envoyé\nun code à 6 chiffres.</string>
+    <string name="otp_cta">Vérifier</string>
+    <string name="otp_resend">Renvoyer le code</string>
+    <string name="otp_skip">Passer pour l\'instant</string>
+
+    <!-- ============== Auth — Success ============== -->
+    <string name="auth_success_title">Bienvenue.</string>
+    <string name="auth_success_sub">Ton compte est prêt. On t\'emmène sur le feed dans un instant.</string>
+
+    <!-- ============== Feed ============== -->
+    <string name="feed_tab_for_you">Pour Toi</string>
+    <string name="feed_tab_following">Abonnements</string>
+    <string name="feed_trending">TENDANCE</string>
+    <string name="feed_challenge">DÉFIER</string>
+    <string name="feed_follow">Suivre</string>
+    <string name="feed_gift">Cadeau</string>
+    <string name="feed_sound_original">Son original</string>
+
+    <!-- ============== Profile sections ============== -->
+    <string name="profile_distinctions">Distinctions</string>
+    <string name="profile_series">Séries</string>
+    <string name="profile_top_fans">Top fans</string>
+    <string name="profile_recent_battles">Derniers Battles</string>
+    <string name="profile_live">EN DIRECT</string>
+
+    <!-- ============== Language picker ============== -->
+    <string name="lang_title">Langue</string>
+    <string name="lang_sub">Choisis ta langue d\'affichage.</string>
+    <string name="lang_fr">Français</string>
+    <string name="lang_fon">Fɔngbè</string>
+    <string name="lang_yo">Yorùbá</string>
+    <string name="lang_short_fr">FR</string>
+    <string name="lang_short_fon">FON</string>
+    <string name="lang_short_yo">YO</string>
+</resources>

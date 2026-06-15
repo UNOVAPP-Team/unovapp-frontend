@@ -1,6 +1,8 @@
 package com.unovapp.android.ui.wallet
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -50,15 +52,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.unovapp.android.ui.components.rememberCountUp
+import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.theme.UnovAppTheme
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
+import com.unovapp.android.ui.theme.UnovMotion
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 
@@ -263,6 +269,11 @@ private fun PacksStep(
 
 @Composable
 private fun BalanceCard(modifier: Modifier = Modifier) {
+    // Count-up sur le solde — démarre à 0 et compte jusqu'à 1240 en 1.4s. Donne le
+    // sentiment "le solde s'affiche" au lieu d'apparaître brut. À brancher sur le vrai
+    // solde quand le wallet API sera là (`GET /wallet`).
+    val animatedCoins = rememberCountUp(targetValue = 1240, durationMs = 1400)
+    val animatedFcfa = rememberCountUp(targetValue = 6200, durationMs = 1400)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -281,14 +292,14 @@ private fun BalanceCard(modifier: Modifier = Modifier) {
                 letterSpacing = 1.4.sp
             )
             Text(
-                text = "1 240",
+                text = "%,d".format(animatedCoins).replace(',', ' '),
                 color = Color(0xFF0D0D0D),
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.6).sp
             )
             Text(
-                text = "jetons · ≈ 6 200 FCFA",
+                text = "jetons · ≈ ${"%,d".format(animatedFcfa).replace(',', ' ')} FCFA",
                 color = Color(0xFF0D0D0D).copy(alpha = 0.85f),
                 fontSize = 12.sp
             )
@@ -309,20 +320,34 @@ private fun PackTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier) {
+    // Scale subtle + animation des couleurs : la tuile sélectionnée "respire" légèrement
+    // pour confirmer le choix sans être agressive
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.02f else 1f,
+        animationSpec = UnovMotion.bouncy(),
+        label = "packScale"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) UnovColors.Accent else UnovColors.Line,
+        animationSpec = UnovMotion.standard(),
+        label = "packBorder"
+    )
+    val bgColor by animateColorAsState(
+        targetValue = if (isSelected) UnovColors.Accent.copy(alpha = 0.10f) else UnovColors.Surface,
+        animationSpec = UnovMotion.standard(),
+        label = "packBg"
+    )
+    Box(modifier = modifier.scale(scale)) {
         Column(
             modifier = Modifier
                 .clip(RoundedCornerShape(16.dp))
-                .background(
-                    if (isSelected) UnovColors.Accent.copy(alpha = 0.10f)
-                    else UnovColors.Surface
-                )
+                .background(bgColor)
                 .border(
                     width = if (isSelected) 1.5.dp else 1.dp,
-                    color = if (isSelected) UnovColors.Accent else UnovColors.Line,
+                    color = borderColor,
                     shape = RoundedCornerShape(16.dp)
                 )
-                .clickable(onClick = onClick)
+                .unovTap(onClick = onClick, pressedScale = 0.96f)
                 .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -384,18 +409,32 @@ private fun ProviderTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) UnovColors.Accent else UnovColors.Line,
+        animationSpec = UnovMotion.standard(),
+        label = "provBorder"
+    )
+    val bgColor by animateColorAsState(
+        targetValue = if (isSelected) UnovColors.Accent.copy(alpha = 0.08f) else UnovColors.Surface,
+        animationSpec = UnovMotion.standard(),
+        label = "provBg"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.02f else 1f,
+        animationSpec = UnovMotion.bouncy(),
+        label = "provScale"
+    )
     Row(
         modifier = modifier
+            .scale(scale)
             .clip(RoundedCornerShape(14.dp))
-            .background(
-                if (isSelected) UnovColors.Accent.copy(alpha = 0.08f) else UnovColors.Surface
-            )
+            .background(bgColor)
             .border(
                 width = if (isSelected) 1.5.dp else 1.dp,
-                color = if (isSelected) UnovColors.Accent else UnovColors.Line,
+                color = borderColor,
                 shape = RoundedCornerShape(14.dp)
             )
-            .clickable(onClick = onClick)
+            .unovTap(onClick = onClick, pressedScale = 0.96f)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)

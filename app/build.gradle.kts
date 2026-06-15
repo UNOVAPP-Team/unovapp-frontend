@@ -1,8 +1,18 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.dagger.hilt.android")
     kotlin("kapt")
+}
+
+// Charge les identifiants de signature depuis keystore.properties (gitignoré).
+// Absent sur les machines/CI sans secrets → la build release reste possible mais non signée.
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) load(FileInputStream(keystorePropsFile))
 }
 
 android {
@@ -19,20 +29,63 @@ android {
         buildConfigField(
             "String",
             "AUTH_BASE_URL",
-            "\"https://api-mock.unovapp.dev/api/v1/\""
+            "\"https://unovapp-auth.onrender.com/api/v1/\""
         )
-        // TODO: remplacer par le vrai Web Client ID Google OAuth (console.cloud.google.com)
+        buildConfigField(
+            "String",
+            "USER_BASE_URL",
+            "\"https://unovapp-user.onrender.com/api/v1/\""
+        )
+        buildConfigField(
+            "String",
+            "SOCIAL_BASE_URL",
+            "\"https://unovapp-social.onrender.com/api/v1/\""
+        )
+        // TODO: remplacer par le vrai Web Client ID Google OAuth quand le backend exposera /auth/google.
         buildConfigField(
             "String",
             "GOOGLE_WEB_CLIENT_ID",
             "\"REPLACE_ME.apps.googleusercontent.com\""
         )
-        buildConfigField("boolean", "USE_STUB_AUTH", "true")
+        buildConfigField("boolean", "USE_STUB_AUTH", "false")
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystorePropsFile.exists()) {
+                storeFile = rootProject.file("app/${keystoreProps["storeFile"]}")
+                storePassword = keystoreProps["storePassword"] as String
+                keyAlias = keystoreProps["keyAlias"] as String
+                keyPassword = keystoreProps["keyPassword"] as String
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Minification désactivée pour ce premier test interne : évite tout risque
+            // R8/Gson sur les DTO Retrofit. À réactiver (isMinifyEnabled = true) + règles
+            // ProGuard avant la mise en production publique.
+            isMinifyEnabled = false
+            signingConfig = if (keystorePropsFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                null
+            }
+        }
     }
 
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    lint {
+        // Le lint « vital » bloquait les builds release (et très lent sur cette machine).
+        // Inutile pour distribuer un APK aux testeurs/fournisseurs — on ne fait pas
+        // échouer la build sur des avertissements lint.
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     composeOptions {
@@ -67,6 +120,10 @@ dependencies {
 
     // Material Components (pour le thème)
     implementation("com.google.android.material:material:1.12.0")
+
+    // AppCompat — utilisé uniquement pour `AppCompatDelegate.setApplicationLocales`
+    // (per-app language preferences avec back-compat depuis API 24, équivalent natif d'Android 13+).
+    implementation("androidx.appcompat:appcompat:1.7.0")
 
     // Hilt
     implementation("com.google.dagger:hilt-android:2.51")

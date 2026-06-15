@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.UnovApp" parent="android:Theme.Material.Light.NoActionBar"/>
+    <!--
+      Parent AppCompat requis pour pouvoir hériter de AppCompatActivity (nécessaire à
+      AppCompatDelegate.setApplicationLocales, cf. LocaleManager.kt). Le rendu visuel
+      reste entièrement piloté par UnovAppTheme côté Compose — ce thème XML ne sert
+      qu'au splash, à la status bar et au cycle d'init Android natif.
+    -->
+    <style name="Theme.UnovApp" parent="Theme.AppCompat.DayNight.NoActionBar"/>
     <style name="Theme.UnovApp.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#0A0A0A</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>

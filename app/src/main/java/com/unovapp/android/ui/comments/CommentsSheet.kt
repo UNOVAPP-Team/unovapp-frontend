@@ -1,29 +1,33 @@
 package com.unovapp.android.ui.comments
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,12 +37,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
@@ -46,7 +53,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.StaggerReveal
+import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.ui.theme.UnovMotion
 
 data class CommentUi(
     val id: String,
@@ -82,6 +92,7 @@ fun CommentsSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by remember { mutableStateOf("") }
+    val likes = remember { mutableStateMapOf<String, Boolean>() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -99,7 +110,6 @@ fun CommentsSheet(
             )
         }
     ) {
-        // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -116,7 +126,7 @@ fun CommentsSheet(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onDismiss)
+                    .unovTap(onClick = onDismiss, pressedScale = 0.9f)
                     .padding(8.dp)
             ) {
                 Icon(
@@ -129,19 +139,25 @@ fun CommentsSheet(
         }
         Divider()
 
-        // Comments list (weight=1 to fill the space between header and input bar)
+        // Commentaires en stagger entry — chaque ligne arrive avec slide+fade séquentiel
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            items(MockComments, key = { it.id }) { c ->
-                CommentRow(c)
+            itemsIndexed(MockComments, key = { _, c -> c.id }) { index, c ->
+                StaggerReveal(index = index) {
+                    CommentRow(
+                        c = c,
+                        liked = likes[c.id] ?: false,
+                        onToggleLike = { likes[c.id] = !(likes[c.id] ?: false) }
+                    )
+                }
             }
         }
 
         Divider()
 
-        // Quick emoji rail
+        // Rail d'emoji rapides — chaque emoji a son tap haptic + scale
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -152,7 +168,7 @@ fun CommentsSheet(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .clickable { text += emoji }
+                        .unovTap(onClick = { text += emoji }, pressedScale = 0.78f)
                         .padding(4.dp)
                 ) {
                     Text(text = emoji, fontSize = 22.sp)
@@ -160,7 +176,7 @@ fun CommentsSheet(
             }
         }
 
-        // Input bar
+        // Input bar : bouton Send qui s'éveille (couleur + scale + rotation subtle) dès qu'il y a du texte
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -174,7 +190,7 @@ fun CommentsSheet(
                     .weight(1f)
                     .clip(RoundedCornerShape(999.dp))
                     .background(UnovColors.SurfaceAlt)
-                    .padding(start = 14.dp, end = 10.dp),
+                    .padding(start = 14.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 BasicTextField(
@@ -206,22 +222,61 @@ fun CommentsSheet(
                     },
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Envoyer",
-                    tint = if (text.isNotBlank()) UnovColors.Accent else UnovColors.TextMute,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable(enabled = text.isNotBlank()) { text = "" }
-                )
+                Spacer(modifier = Modifier.width(6.dp))
+                SendButton(active = text.isNotBlank(), onClick = { text = "" })
             }
         }
     }
 }
 
+/**
+ * Bouton "envoyer" qui prend vie dès qu'il y a du texte :
+ *  - couleur passe de gris à or (transition standard)
+ *  - scale up à 1.15× avec spring bouncy (effet "ressort armé")
+ *  - rotation -15° subtle pour suggérer le mouvement à venir
+ */
 @Composable
-private fun CommentRow(c: CommentUi) {
+private fun SendButton(active: Boolean, onClick: () -> Unit) {
+    val tint by animateColorAsState(
+        targetValue = if (active) UnovColors.Accent else UnovColors.TextMute,
+        animationSpec = UnovMotion.standard(),
+        label = "sendTint"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (active) 1.15f else 1f,
+        animationSpec = UnovMotion.bouncy(),
+        label = "sendScale"
+    )
+    val rotation by animateFloatAsState(
+        targetValue = if (active) -15f else 0f,
+        animationSpec = UnovMotion.smooth(),
+        label = "sendRot"
+    )
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .unovTap(onClick = onClick, enabled = active, pressedScale = 0.85f),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Send,
+            contentDescription = "Envoyer",
+            tint = tint,
+            modifier = Modifier
+                .size(22.dp)
+                .scale(scale)
+                .rotate(rotation)
+        )
+    }
+}
+
+@Composable
+private fun CommentRow(
+    c: CommentUi,
+    liked: Boolean,
+    onToggleLike: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -281,33 +336,51 @@ private fun CommentRow(c: CommentUi) {
                     color = UnovColors.TextMute,
                     fontSize = 12.sp
                 )
-                val noRipple = remember { MutableInteractionSource() }
                 Text(
                     text = "Répondre",
                     color = UnovColors.TextMute,
                     fontSize = 12.sp,
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .clickable(
-                            interactionSource = noRipple,
-                            indication = null
-                        ) {}
+                        .unovTap(onClick = {}, pressedScale = 0.92f)
                 )
             }
         }
+        // Like avec crossfade outline ↔ filled + scale pop
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.unovTap(onClick = onToggleLike, pressedScale = 0.85f)
         ) {
-            Icon(
-                imageVector = Icons.Outlined.FavoriteBorder,
-                contentDescription = null,
-                tint = UnovColors.TextMute,
-                modifier = Modifier.size(18.dp)
-            )
+            Box(modifier = Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !liked,
+                    enter = scaleIn(initialScale = 0.6f, animationSpec = UnovMotion.bouncy()) + fadeIn(UnovMotion.fast()),
+                    exit = scaleOut(targetScale = 0.6f, animationSpec = UnovMotion.snappy()) + fadeOut(UnovMotion.fast())
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.FavoriteBorder,
+                        contentDescription = null,
+                        tint = UnovColors.TextMute,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = liked,
+                    enter = scaleIn(initialScale = 0.3f, animationSpec = UnovMotion.wobbly()) + fadeIn(UnovMotion.fast()),
+                    exit = scaleOut(targetScale = 0.5f, animationSpec = UnovMotion.snappy()) + fadeOut(UnovMotion.fast())
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = "Aimé",
+                        tint = UnovColors.Accent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
             Text(
                 text = c.likesFmt,
-                color = UnovColors.TextMute,
+                color = if (liked) UnovColors.Accent else UnovColors.TextMute,
                 fontSize = 11.sp
             )
         }

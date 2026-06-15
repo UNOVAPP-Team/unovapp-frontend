@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fɔngbè — TODO: VALIDATION URGENTE par locuteur natif béninois.
+  Mes connaissances en Fɔngbè sont limitées : ces strings sont des approximations
+  basées sur les standards d'orthographe Fon (alphabet Pierre Hountondji, 1973).
+  Caractères spéciaux : ɛ ɔ ɖ ɣ ŋ (préservés via Unicode).
+  Mots empruntés au français (email, MoMo) conservés tels quels.
+-->
+<resources>
+    <string name="app_name">UNOVAPP</string>
+
+    <!-- BottomNav -->
+    <string name="nav_feed">Adan</string>
+    <string name="nav_search">Bibiɔ</string>
+    <string name="nav_inbox">Wɛnsagbe</string>
+    <string name="nav_profile">Nukplɔn</string>
+    <string name="nav_create">Bló</string>
+
+    <!-- Welcome -->
+    <string name="welcome_title">Mi kú wá\nUNOVAPP mɛ.</string>
+    <string name="welcome_subtitle">Vidéo gbɛtɔ́ ɖɔ Afrika mɛ. Yi xɔ-mɛ bo kpɔ́n fí e a ko sɛ̀, alǒ blǒ akáwun towe ɖó gan ɖaxó mɛ.</string>
+    <string name="welcome_register_title">Bló akáwun ce</string>
+    <string name="welcome_register_sub">Mɛ yɔyɔ̌ wɛ · Nyikɔ ɖɔ́dó ɖó 30 segúndà mɛ</string>
+    <string name="welcome_login_title">Yi xɔ-mɛ</string>
+    <string name="welcome_login_sub">A ko ɖó akáwun · Email + xósɛ́ɖóxó</string>
+    <string name="welcome_soon">ZINZIN</string>
+    <string name="welcome_security">CIFFRƐ́ · MOMO &amp; MOOV SƆ NƆ</string>
+
+    <!-- Auth Form -->
+    <string name="auth_eyebrow_register">NYIKƆ ƉƆ́DÓ</string>
+    <string name="auth_eyebrow_login">YIYI XƆ-MƐ</string>
+    <string name="auth_title_register">Akáwun towe,\nɖó ɖó kpaa kpaa.</string>
+    <string name="auth_title_login">Mì gbɔn wá,\na lɛ́ kɔ wá.</string>
+    <string name="auth_sub_register">Email ɖó xɔ-yiyi, nyikɔ ɖó nyinyɔ̌nù, xósɛ́ɖóxó ɖó sò-ɖó-go.</string>
+    <string name="auth_sub_login">Wlán email kpó xósɛ́ɖóxó towe kpó bo lɛ́ jɛ.</string>
+    <string name="auth_label_email">EMAIL</string>
+    <string name="auth_label_username">NYIKƆ</string>
+    <string name="auth_label_password">XÓSƐ́ƉÓXÓ</string>
+    <string name="auth_label_phone">ALOKPA</string>
+    <string name="auth_placeholder_email">email_towe@kpɔ́n.com</string>
+    <string name="auth_placeholder_username">akossi_creator</string>
+    <string name="auth_placeholder_password">Wekwín 8 alǒ kpo wǔ</string>
+    <string name="auth_phone_hint">Mí na sɛ́ SMS dó we bo kpɔ́n nǔ nyɔ̌ — é ɖó dandan ǎ.</string>
+    <string name="auth_already">A ko ɖó akáwun à?</string>
+    <string name="auth_not_yet">A ko ɖɔ́ nyikɔ ǎ?</string>
+    <string name="auth_cta_register">Bló akáwun ce</string>
+    <string name="auth_cta_login">Yi xɔ-mɛ</string>
+
+    <!-- Erreurs -->
+    <string name="auth_err_email">Email ɖɔ́ nyɔ̌ ǎ.</string>
+    <string name="auth_err_password">Xósɛ́ɖóxó nyí glò dín (wekwín 8+).</string>
+    <string name="auth_err_username">Nyikɔ ɖó tíntín 3-20 mɛ.</string>
+
+    <!-- OTP -->
+    <string name="otp_eyebrow">KPƆ́NNÚNYƆ̌</string>
+    <string name="otp_title">Mí ko sɛ́ kódù\ne ɖó wekwín 6 dó we.</string>
+    <string name="otp_cta">Kpɔ́n</string>
+    <string name="otp_resend">Sɛ́ kódù ɔ́ ɖè</string>
+    <string name="otp_skip">Dìn ɔ́ jó dó</string>
+
+    <!-- Success -->
+    <string name="auth_success_title">Mi kú wá.</string>
+    <string name="auth_success_sub">Akáwun towe ko ɖóɖó. Mí kplá we yi adan mɛ ɖíɖíɖí.</string>
+
+    <!-- Feed -->
+    <string name="feed_tab_for_you">Nú We</string>
+    <string name="feed_tab_following">Mɛ Wɛ Xɔ́</string>
+    <string name="feed_trending">DƆ́DÓ</string>
+    <string name="feed_challenge">XLƐ́</string>
+    <string name="feed_follow">Xɔ́</string>
+    <string name="feed_gift">Nǔnina</string>
+    <string name="feed_sound_original">Gbɛ tɔ́n ɖéesú</string>
+
+    <!-- Profile -->
+    <string name="profile_distinctions">Susu</string>
+    <string name="profile_series">Xokwin</string>
+    <string name="profile_top_fans">Yɔyɔ́ jí</string>
+    <string name="profile_recent_battles">Aɖǎ yɔyɔ́</string>
+    <string name="profile_live">É XÓ ƉIN</string>
+
+    <!-- Langue -->
+    <string name="lang_title">Gbè</string>
+    <string name="lang_sub">Sɔ́ gbè e a jló ná zán é.</string>
+    <string name="lang_fr">Flɛnsígbè</string>
+    <string name="lang_fon">Fɔngbè</string>
+    <string name="lang_yo">Yorùbá</string>
+    <string name="lang_short_fr">FR</string>
+    <string name="lang_short_fon">FON</string>
+    <string name="lang_short_yo">YO</string>
+</resources>

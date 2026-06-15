@@ -1,6 +1,7 @@
 package com.unovapp.android.data.network
 
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import com.google.gson.JsonSyntaxException
 import retrofit2.HttpException
 import java.io.IOException
@@ -15,7 +16,24 @@ sealed interface NetworkResult<out T> {
     data class Failure(val error: ApiError) : NetworkResult<Nothing>
 }
 
-private data class ErrorPayload(val code: String?, val message: String?)
+/**
+ * Couvre les deux formes connues :
+ *  - Contrat UNOVAPP : `{ code, message, details }`.
+ *  - NestJS par défaut : `{ statusCode, error, message }` où `message` peut être un string
+ *    ou un array de strings (cas validation `class-validator`).
+ */
+private data class ErrorPayload(
+    val code: String?,
+    val error: String?,
+    val message: JsonElement?
+)
+
+private fun JsonElement?.flattenMessage(): String? = when {
+    this == null || isJsonNull -> null
+    isJsonPrimitive -> asString
+    isJsonArray -> asJsonArray.joinToString(" · ") { it.asString }
+    else -> toString()
+}
 
 /**
  * Exécute un bloc Retrofit suspendu et normalise les exceptions en [ApiError].
@@ -44,8 +62,8 @@ internal fun parseHttpError(e: HttpException): ApiError {
     val payload = rawBody?.let {
         runCatching { Gson().fromJson(it, ErrorPayload::class.java) }.getOrNull()
     }
-    val msg = payload?.message
-    val errCode = payload?.code ?: "HTTP_$code"
+    val msg = payload?.message.flattenMessage()
+    val errCode = payload?.code ?: payload?.error ?: "HTTP_$code"
 
     return when (code) {
         401 -> ApiError.Unauthorized(msg ?: "Session expirée. Reconnecte-toi.")
@@ -54,7 +72,7 @@ internal fun parseHttpError(e: HttpException): ApiError {
             userMessage = msg ?: "Requête invalide.",
             httpStatus = code
         )
-        in 500..599 -> ApiError.Server(msg ?: "Service indisponible.")
+        in 500..599 -> ApiError.Server(msg ?: "Service indisponible.", httpStatus = code)
         else -> ApiError.Unknown(msg ?: "Erreur inconnue (HTTP $code).")
     }
 }

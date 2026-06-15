@@ -2,68 +2,67 @@ package com.unovapp.android.data.auth
 
 import com.google.gson.annotations.SerializedName
 
-/* ---------- Requêtes ---------- */
+/* ---------- Requêtes (alignées sur le Swagger backend) ---------- */
+
+data class RegisterRequest(
+    val email: String,
+    val username: String,
+    val password: String,
+    @SerializedName("phone_number") val phoneNumber: String?
+)
+
+data class LoginRequest(
+    val email: String,
+    val password: String
+)
 
 data class SendOtpRequest(
-    val phone: String,
-    @SerializedName("country_code") val countryCode: String
+    @SerializedName("phone_number") val phoneNumber: String
 )
 
 data class VerifyOtpRequest(
-    val phone: String,
+    @SerializedName("phone_number") val phoneNumber: String,
     val code: String
 )
 
-data class GoogleSignInRequest(
-    @SerializedName("id_token") val idToken: String
-)
-
-data class RefreshRequest(
+data class RefreshTokenRequest(
     @SerializedName("refresh_token") val refreshToken: String
 )
 
-/* ---------- Réponses ---------- */
+/* ---------- Réponses ----------
+ * Le backend NestJS sérialise en camelCase (pas snake_case) — pas de @SerializedName ici.
+ */
 
-data class AuthSessionDto(
-    @SerializedName("access_token") val accessToken: String,
-    @SerializedName("refresh_token") val refreshToken: String,
-    @SerializedName("token_type") val tokenType: String,
-    @SerializedName("expires_in") val expiresIn: Long,
-    val user: UserDto
+data class TokensResponse(
+    val accessToken: String,
+    val refreshToken: String
 )
 
-data class UserDto(
-    val id: String,
-    val username: String,
-    @SerializedName("display_name") val displayName: String,
-    @SerializedName("avatar_url") val avatarUrl: String?,
-    @SerializedName("wallet_balance") val walletBalance: Int
+data class MeResponse(
+    val userId: String,
+    val email: String
 )
 
-data class SendOtpResponse(
-    @SerializedName("expires_in") val expiresIn: Int
+data class MessageResponse(
+    val message: String
 )
 
 /* ---------- Modèle domaine ---------- */
 
+/**
+ * Identité minimale qu'on stocke en session côté client. Le username / displayName / avatar
+ * viendront du service User (`GET /users/{id}`) — pas encore câblé.
+ */
 data class AuthSession(
     val accessToken: String,
     val refreshToken: String,
-    val expiresInSeconds: Long,
     val userId: String,
-    val username: String,
-    val displayName: String,
-    val avatarUrl: String?,
-    val walletBalance: Int
+    val email: String
 )
 
-fun AuthSessionDto.toDomain() = AuthSession(
+fun TokensResponse.toSessionWithMe(me: MeResponse) = AuthSession(
     accessToken = accessToken,
     refreshToken = refreshToken,
-    expiresInSeconds = expiresIn,
-    userId = user.id,
-    username = user.username,
-    displayName = user.displayName,
-    avatarUrl = user.avatarUrl,
-    walletBalance = user.walletBalance
+    userId = me.userId,
+    email = me.email
 )

@@ -1,10 +1,22 @@
 package com.unovapp.android.ui.inbox
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,15 +24,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
@@ -32,18 +45,17 @@ import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -54,9 +66,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.theme.UnovAppTheme
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
+import com.unovapp.android.ui.theme.UnovMotion
+import kotlinx.coroutines.delay
 
 enum class NotifType { Like, Gift, Battle, Comment, Follow, Live }
 
@@ -106,7 +121,6 @@ fun InboxScreen(contentPadding: PaddingValues = PaddingValues(0.dp)) {
                 .background(Color(0xFF121212))
                 .padding(contentPadding)
         ) {
-            // Title + tabs
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 6.dp)) {
                 Text(
                     text = "Boîte",
@@ -123,12 +137,11 @@ fun InboxScreen(contentPadding: PaddingValues = PaddingValues(0.dp)) {
                 )
             }
 
-            // Notifications list
-            LazyColumn(
-                contentPadding = PaddingValues(vertical = 8.dp)
-            ) {
-                items(MOCK_NOTIFICATIONS, key = { it.id }) { n ->
-                    NotificationRow(n)
+            LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                itemsIndexed(MOCK_NOTIFICATIONS, key = { _, n -> n.id }) { index, n ->
+                    StaggeredRow(index = index) {
+                        NotificationRow(n)
+                    }
                 }
             }
         }
@@ -150,20 +163,30 @@ private fun TabPillsRow(
     ) {
         tabs.forEach { tab ->
             val isActive = tab == active
-            val noRipple = remember { MutableInteractionSource() }
+            val tint by animateColorAsState(
+                targetValue = if (isActive) UnovColors.Text else UnovColors.TextMute,
+                animationSpec = UnovMotion.standard(),
+                label = "tabTint"
+            )
             Box(
                 modifier = Modifier
-                    .clickable(interactionSource = noRipple, indication = null) { onSelect(tab) }
+                    .unovTap(onClick = { onSelect(tab) }, pressedScale = 0.94f)
                     .padding(vertical = 4.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = tab,
-                        color = if (isActive) UnovColors.Text else UnovColors.TextMute,
+                        color = tint,
                         fontSize = 14.sp,
                         fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium
                     )
-                    if (isActive) {
+                    AnimatedVisibility(
+                        visible = isActive,
+                        enter = scaleIn(initialScale = 0.3f, animationSpec = UnovMotion.bouncy()) +
+                            fadeIn(UnovMotion.fast()),
+                        exit = scaleOut(targetScale = 0.3f, animationSpec = UnovMotion.snappy()) +
+                            fadeOut(UnovMotion.fast())
+                    ) {
                         Box(
                             modifier = Modifier
                                 .padding(top = 4.dp)
@@ -178,17 +201,42 @@ private fun TabPillsRow(
     }
 }
 
+/* ---------- Notification row + stagger entry ---------- */
+
+@Composable
+private fun StaggeredRow(index: Int, content: @Composable () -> Unit) {
+    var visible by remember { mutableStateOf(false) }
+    val capped = index.coerceAtMost(UnovMotion.StaggerMaxItems)
+    LaunchedEffect(Unit) {
+        delay((capped * UnovMotion.StaggerDelayMs).toLong())
+        visible = true
+    }
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.96f,
+        animationSpec = UnovMotion.smooth(),
+        label = "rowScale"
+    )
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(UnovMotion.standard()) +
+            slideInVertically(UnovMotion.decelerate()) { it / 3 }
+    ) {
+        Box(modifier = Modifier.scale(scale)) {
+            content()
+        }
+    }
+}
+
 @Composable
 private fun NotificationRow(n: NotificationUi) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {}
+            .unovTap(onClick = {})
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Avatar + type badge bottom-right
         Box(modifier = Modifier.size(54.dp)) {
             Box(modifier = Modifier.align(Alignment.TopStart)) {
                 Avatar(idx = n.avatarIdx, name = n.user, size = 48.dp)
@@ -201,7 +249,6 @@ private fun NotificationRow(n: NotificationUi) {
             )
         }
 
-        // Text + time
         Column(modifier = Modifier.weight(1f)) {
             val verifiedId = "verified-checkmark"
             val inlineContent = mapOf(
@@ -235,7 +282,6 @@ private fun NotificationRow(n: NotificationUi) {
             )
         }
 
-        // Action button (Suivre / Voir live)
         when (n.type) {
             NotifType.Follow -> FollowBackButton()
             NotifType.Live -> WatchLiveButton()
@@ -244,6 +290,10 @@ private fun NotificationRow(n: NotificationUi) {
     }
 }
 
+/**
+ * Badge type animé. Like : cœur qui pulse en boucle (sang dans le bouton).
+ * Live : point rouge pulsant pour rappeler une diffusion en direct. Reste statique sinon.
+ */
 @Composable
 private fun TypeBadge(type: NotifType, modifier: Modifier = Modifier) {
     val (bg, icon, tint) = when (type) {
@@ -255,9 +305,25 @@ private fun TypeBadge(type: NotifType, modifier: Modifier = Modifier) {
         NotifType.Live -> Triple(SolidBg(UnovColors.Danger), Icons.Outlined.LiveTv, Color.White)
     }
 
+    // Pulse infini pour Like et Live — capte l'attention sans agresser
+    val pulseScale = if (type == NotifType.Like || type == NotifType.Live) {
+        val transition = rememberInfiniteTransition(label = "badgePulse")
+        val s by transition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.18f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseScale"
+        )
+        s
+    } else 1f
+
     Box(
         modifier = modifier
             .size(22.dp)
+            .scale(pulseScale)
             .clip(CircleShape)
             .background(bg)
             .border(2.dp, Color(0xFF121212), CircleShape),
@@ -281,7 +347,7 @@ private fun FollowBackButton() {
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(UnovColors.Accent)
-            .clickable {}
+            .unovTap(onClick = {}, pressedScale = 0.92f)
             .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
         Text(
@@ -295,20 +361,31 @@ private fun FollowBackButton() {
 
 @Composable
 private fun WatchLiveButton() {
+    // Live dot pulsant à gauche pour appuyer le "en direct"
+    val transition = rememberInfiniteTransition(label = "liveDot")
+    val dotAlpha by transition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "liveDotAlpha"
+    )
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(UnovColors.Danger)
-            .clickable {}
+            .unovTap(onClick = {}, pressedScale = 0.92f)
             .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Icon(
-            imageVector = Icons.Outlined.LiveTv,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier.size(12.dp)
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = dotAlpha))
         )
         Text(
             text = "Voir",
@@ -326,8 +403,6 @@ private fun buildNotifText(n: NotificationUi, verifiedInlineId: String): Annotat
         }
         if (n.verified) {
             append(" ")
-            // L'id matche celui déclaré dans inlineContent du Text composable —
-            // le texte de fallback "[v]" n'apparaît que si l'inlineContent n'est pas fourni.
             appendInlineContent(verifiedInlineId, "[v]")
         }
         withStyle(SpanStyle(color = UnovColors.TextDim)) {

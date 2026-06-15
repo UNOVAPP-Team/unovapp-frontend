@@ -15,6 +15,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.delay
 
 /**
  * Lecteur vidéo HLS (ou MP4) plein écran, façon TikTok/Reels.
@@ -33,7 +34,9 @@ import androidx.media3.ui.PlayerView
 fun VideoPlayer(
     url: String,
     isPlaying: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    muted: Boolean = true,
+    onProgress: ((Float) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -43,7 +46,7 @@ fun VideoPlayer(
             setMediaItem(MediaItem.fromUri(url))
             prepare()
             repeatMode = Player.REPEAT_MODE_ALL
-            volume = 0f
+            volume = if (muted) 0f else 1f
             playWhenReady = isPlaying
         }
     }
@@ -51,6 +54,23 @@ fun VideoPlayer(
     // Sync play/pause avec le pager
     LaunchedEffect(isPlaying) {
         exoPlayer.playWhenReady = isPlaying
+    }
+
+    // Sync volume avec l'état mute (hoisté par le parent — partagé entre items)
+    LaunchedEffect(muted) {
+        exoPlayer.volume = if (muted) 0f else 1f
+    }
+
+    // Tick de progression — 4 fois par seconde suffit pour une barre fluide sans coût CPU
+    if (onProgress != null) {
+        LaunchedEffect(exoPlayer, isPlaying) {
+            while (true) {
+                val duration = exoPlayer.duration.takeIf { it > 0 } ?: 0L
+                val position = exoPlayer.currentPosition.coerceAtLeast(0L)
+                onProgress(if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f)
+                delay(250)
+            }
+        }
     }
 
     // Auto-pause quand l'app va en background — économise data + batterie

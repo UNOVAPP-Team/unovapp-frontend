@@ -73,11 +73,27 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.ErrorRetry
+import com.unovapp.android.ui.components.ShimmerBox
 import com.unovapp.android.ui.components.Filigree
+import com.unovapp.android.ui.components.LanguageChip
+import com.unovapp.android.ui.components.LanguagePickerSheet
 import com.unovapp.android.ui.components.Sparkline
+import com.unovapp.android.ui.components.StaggerReveal
+import com.unovapp.android.ui.components.rememberCountUp
+import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.theme.UnovAppTheme
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
+import com.unovapp.android.ui.theme.UnovMotion
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 
 /* ---------- State ---------- */
 
@@ -159,16 +175,34 @@ private val DEFAULT_VIDEOS = listOf(
 
 @Composable
 fun ProfileScreen(
-    state: ProfileUiState = ProfileUiState(),
+    baseState: ProfileUiState = ProfileUiState(),
     contentPadding: PaddingValues = PaddingValues(0.dp),
     onOpenBattle: () -> Unit = {},
-    onOpenWallet: () -> Unit = {}
+    onOpenWallet: () -> Unit = {},
+    onLoggedOut: () -> Unit = {},
+    viewModel: ProfileViewModel = hiltViewModel()
 ) {
     UnovAppTheme {
+        val net by viewModel.state.collectAsStateWithLifecycle()
+        // Données réelles (/users/me) fusionnées dans l'état d'affichage.
+        // Les sections riches (battles, top fans, grille…) restent mockées tant que
+        // le backend ne les expose pas.
+        val state = mergeRealProfile(baseState, net.profile)
+
         var subscribed by remember { mutableStateOf(false) }
         var tab by remember { mutableStateOf(ProfileTab.Videos) }
         var filter by remember { mutableStateOf("Récents") }
+        var langPickerOpen by remember { mutableStateOf(false) }
 
+        when {
+            // Premier chargement échoué (aucune donnée) → erreur plein écran + retry.
+            net.profile == null && net.error != null -> ProfileErrorState(
+                message = "Impossible de charger ton profil.\n${net.error}",
+                onRetry = { viewModel.load() }
+            )
+            // Premier chargement en cours → squelette (pas de flash de données mock).
+            net.profile == null && net.isLoading -> ProfileLoadingState()
+            else -> {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -176,7 +210,7 @@ fun ProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(contentPadding)
         ) {
-            CoverHeader(state = state)
+            CoverHeader(state = state, onOpenLangPicker = { langPickerOpen = true })
             IdentityBlock(
                 state = state,
                 subscribed = subscribed,
@@ -185,36 +219,158 @@ fun ProfileScreen(
                 onOpenWallet = onOpenWallet
             )
 
-            SectionHeader(eyebrow = "Distinctions")
-            HorizontalScrollRow(start = 16.dp, end = 16.dp) {
-                state.achievements.forEach { AchievementPill(it) }
+            // Sections en cascade — chaque bloc apparaît avec un léger délai pour guider l'œil
+            // de haut en bas. Pas de stagger sur cover/identity (déjà visibles au premier paint).
+            StaggerReveal(index = 0) {
+                Column {
+                    SectionHeader(eyebrow = "Distinctions")
+                    HorizontalScrollRow(start = 16.dp, end = 16.dp) {
+                        state.achievements.forEach { AchievementPill(it) }
+                    }
+                }
             }
 
-            SectionHeader(eyebrow = "Séries", action = "Tout voir")
-            HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 14.dp) {
-                state.highlights.forEach { HighlightCircle(it) }
+            StaggerReveal(index = 1) {
+                Column {
+                    SectionHeader(eyebrow = "Séries", action = "Tout voir")
+                    HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 14.dp) {
+                        state.highlights.forEach { HighlightCircle(it) }
+                    }
+                }
             }
 
-            SectionHeader(eyebrow = "Top fans")
-            HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 6.dp) {
-                state.topFans.forEach { TopFanChip(it) }
+            StaggerReveal(index = 2) {
+                Column {
+                    SectionHeader(eyebrow = "Top fans")
+                    HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 6.dp) {
+                        state.topFans.forEach { TopFanChip(it) }
+                    }
+                }
             }
 
-            DashboardCard(state = state)
-
-            SectionHeader(eyebrow = "Derniers Battles", action = "Historique")
-            Column(
-                modifier = Modifier.padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                state.recentBattles.forEach { BattleRow(it) }
+            StaggerReveal(index = 3) {
+                DashboardCard(state = state)
             }
 
-            ContentTabs(active = tab, onTabChange = { tab = it })
-            FilterPills(selected = filter, onSelect = { filter = it })
-            VideoGrid(videos = state.gridVideos)
+            StaggerReveal(index = 4) {
+                Column {
+                    SectionHeader(eyebrow = "Derniers Battles", action = "Historique")
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        state.recentBattles.forEach { BattleRow(it) }
+                    }
+                }
+            }
+
+            StaggerReveal(index = 5) {
+                Column {
+                    ContentTabs(active = tab, onTabChange = { tab = it })
+                    FilterPills(selected = filter, onSelect = { filter = it })
+                    VideoGrid(videos = state.gridVideos)
+                }
+            }
+
+            StaggerReveal(index = 6) {
+                LogoutButton(onClick = { viewModel.logout(onLoggedOut) })
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (langPickerOpen) {
+            LanguagePickerSheet(onDismiss = { langPickerOpen = false })
+        }
+            }
+        }
+    }
+}
+
+/* ---------- États chargement / erreur ---------- */
+
+@Composable
+private fun ProfileErrorState(message: String, onRetry: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF050505)),
+        contentAlignment = Alignment.Center
+    ) {
+        ErrorRetry(message = message, onRetry = onRetry)
+    }
+}
+
+@Composable
+private fun ProfileLoadingState() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF050505))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        ShimmerBox(modifier = Modifier.fillMaxWidth().height(150.dp), shape = RoundedCornerShape(20.dp))
+        ShimmerBox(modifier = Modifier.size(84.dp), shape = CircleShape)
+        ShimmerBox(modifier = Modifier.fillMaxWidth(0.5f).height(22.dp))
+        ShimmerBox(modifier = Modifier.fillMaxWidth(0.8f).height(14.dp))
+        ShimmerBox(modifier = Modifier.fillMaxWidth().height(90.dp), shape = RoundedCornerShape(16.dp))
+        ShimmerBox(modifier = Modifier.fillMaxWidth().height(120.dp), shape = RoundedCornerShape(16.dp))
+    }
+}
+
+/* ---------- Intégration données réelles (/users/me) ---------- */
+
+/** Fusionne le profil réel dans l'état mock (ne touche qu'aux champs d'identité connus). */
+private fun mergeRealProfile(
+    base: ProfileUiState,
+    p: com.unovapp.android.data.user.UserProfileDto?
+): ProfileUiState {
+    if (p == null) return base
+    return base.copy(
+        displayName = p.displayName?.takeIf { it.isNotBlank() } ?: p.username,
+        username = p.username,
+        isVerified = p.isVerified,
+        tier = if (p.subscriptionTier.equals("free", ignoreCase = true)) "Tier Free"
+        else "Tier " + p.subscriptionTier.replaceFirstChar { it.uppercase() },
+        bio = p.bio?.takeIf { it.isNotBlank() } ?: base.bio,
+        followersFmt = formatCompact(p.followersCount),
+        revenueFcfaFmt = formatThousands(p.walletBalance)
+    )
+}
+
+private fun formatCompact(n: Int): String = when {
+    n >= 1_000_000 -> String.format("%.1f M", n / 1_000_000.0).replace(".0 ", " ")
+    n >= 1_000 -> String.format("%.1f K", n / 1_000.0).replace(".0 ", " ")
+    else -> n.toString()
+}
+
+private fun formatThousands(amount: Double): String =
+    amount.toLong().toString().reversed().chunked(3).joinToString(" ").reversed()
+
+@Composable
+private fun LogoutButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, UnovColors.Line, RoundedCornerShape(14.dp))
+                .clickable(onClick = onClick)
+                .padding(vertical = 14.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Se déconnecter",
+                color = UnovColors.Danger,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -222,7 +378,7 @@ fun ProfileScreen(
 /* ---------- Cover ---------- */
 
 @Composable
-private fun CoverHeader(state: ProfileUiState) {
+private fun CoverHeader(state: ProfileUiState, onOpenLangPicker: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -318,13 +474,28 @@ private fun CoverHeader(state: ProfileUiState) {
                     modifier = Modifier.size(11.dp)
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                LanguageChip(onClick = onOpenLangPicker)
                 CoverIconButton(Icons.Outlined.QrCode, "QR")
                 CoverIconButton(Icons.Filled.MoreVert, "Plus")
             }
         }
 
-        // Live indicator (bottom-left)
+        // Live indicator (bottom-left) — dot pulsant + count-up sur les spectateurs
+        val liveTransition = rememberInfiniteTransition(label = "liveDotInf")
+        val dotAlpha by liveTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(700, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "liveDotAlpha"
+        )
+        val animatedViewers = rememberCountUp(targetValue = state.liveViewers, durationMs = 1500)
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -344,7 +515,7 @@ private fun CoverHeader(state: ProfileUiState) {
                     modifier = Modifier
                         .size(5.dp)
                         .clip(CircleShape)
-                        .background(Color.White)
+                        .background(Color.White.copy(alpha = dotAlpha))
                 )
                 Text(
                     text = "EN DIRECT",
@@ -355,7 +526,7 @@ private fun CoverHeader(state: ProfileUiState) {
                 )
             }
             Text(
-                text = "${"%,d".format(state.liveViewers).replace(',', ' ')} spectateurs",
+                text = "${"%,d".format(animatedViewers).replace(',', ' ')} spectateurs",
                 color = Color.White,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
@@ -366,14 +537,13 @@ private fun CoverHeader(state: ProfileUiState) {
 
 @Composable
 private fun CoverIconButton(icon: ImageVector, contentDescription: String) {
-    val noRipple = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .size(34.dp)
             .clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.42f))
             .border(1.dp, UnovColors.Accent.copy(alpha = 0.18f), CircleShape)
-            .clickable(interactionSource = noRipple, indication = null) {},
+            .unovTap(onClick = {}, pressedScale = 0.88f),
         contentAlignment = Alignment.Center
     ) {
         Icon(
