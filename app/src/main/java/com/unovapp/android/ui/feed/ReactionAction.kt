@@ -97,25 +97,26 @@ fun ReactionAction(
             )
         }
     ) {
-        Box(modifier = Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(30.dp), contentAlignment = Alignment.Center) {
             if (current == null) {
                 Icon(
                     imageVector = Icons.Outlined.FavoriteBorder,
                     contentDescription = "Réagir",
                     tint = Color.White,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(30.dp)
                 )
             } else {
                 Text(
                     text = current.emoji,
-                    fontSize = 30.sp,
+                    fontSize = 27.sp,
                     modifier = Modifier.graphicsLayer { scaleX = pop; scaleY = pop }
                 )
             }
         }
+        // Compteur toujours visible (épuré, façon TikTok) — pas de label texte.
         Text(
-            text = current?.label ?: countFmt,
-            color = current?.color ?: Color.White,
+            text = countFmt,
+            color = Color.White,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold
         )

@@ -394,7 +394,7 @@ private fun ActionRail(
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         AvatarWithFollow(
@@ -542,7 +542,7 @@ private fun ActionPill(
             contentDescription = label,
             tint = tint,
             modifier = Modifier
-                .size(34.dp)
+                .size(30.dp)
                 .scale(popScale)
         )
         Text(
@@ -568,7 +568,7 @@ private fun GiftButton(onClick: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(40.dp)
                 .clip(CircleShape)
                 .background(UnovGradients.Gold),
             contentAlignment = Alignment.Center
@@ -577,15 +577,9 @@ private fun GiftButton(onClick: () -> Unit) {
                 imageVector = Icons.Outlined.Redeem,
                 contentDescription = "Envoyer un cadeau (Mobile Money)",
                 tint = Color(0xFF0D0D0D),
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(21.dp)
             )
         }
-        Text(
-            text = "Cadeau",
-            color = UnovColors.Accent,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
-        )
     }
 }
 
