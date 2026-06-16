@@ -64,15 +64,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.EmptyState
 import com.unovapp.android.ui.components.ErrorRetry
 import com.unovapp.android.ui.components.ShimmerBox
 import com.unovapp.android.ui.components.Filigree
@@ -98,29 +103,30 @@ import androidx.compose.animation.core.tween
 /* ---------- State ---------- */
 
 data class ProfileUiState(
-    val displayName: String = "Aminata Sossou",
-    val username: String = "aminata.cot",
-    val isVerified: Boolean = true,
-    val tier: String = "Tier Or",
-    val city: String = "Cotonou",
-    val bio: String = "Comédienne · J'écris la vie quotidienne au Bénin 🇧🇯. Les mamans, les marchés, les vendredis soir.",
-    val website: String = "aminata.bj",
-    val followersFmt: String = "412 K",
-    val likesFmt: String = "8,2 M",
-    val videosFmt: String = "128",
-    val followersTrend: String = "+12%",
-    val videosTrend: String = "+4",
-    val followersSpark: List<Float> = listOf(2f, 3f, 4f, 3f, 5f, 6f, 7f, 7f, 9f, 11f),
-    val likesSpark: List<Float> = listOf(5f, 6f, 5f, 7f, 8f, 7f, 9f, 10f, 11f, 12f),
-    val liveViewers: Int = 2_487,
-    val revenueFcfaFmt: String = "47 200",
-    val revenueTrend: String = "+34%",
-    val revenueSpark: List<Float> = listOf(8f, 12f, 11f, 15f, 18f, 22f, 21f, 28f, 32f, 35f, 42f, 47f),
-    val achievements: List<Achievement> = DEFAULT_ACHIEVEMENTS,
-    val highlights: List<Highlight> = DEFAULT_HIGHLIGHTS,
-    val topFans: List<TopFan> = DEFAULT_TOP_FANS,
-    val recentBattles: List<BattleEntry> = DEFAULT_BATTLES,
-    val gridVideos: List<VideoTile> = DEFAULT_VIDEOS
+    val displayName: String = "",
+    val username: String = "",
+    val isVerified: Boolean = false,
+    val tier: String = "Tier Free",
+    val city: String = "",
+    val bio: String = "",
+    val website: String = "",
+    val avatarUrl: String? = null,
+    val followersFmt: String = "0",
+    val likesFmt: String = "0",
+    val videosFmt: String = "0",
+    val followersTrend: String = "",
+    val videosTrend: String = "",
+    val followersSpark: List<Float> = emptyList(),
+    val likesSpark: List<Float> = emptyList(),
+    val liveViewers: Int = 0,
+    val revenueFcfaFmt: String = "0",
+    val revenueTrend: String = "",
+    val revenueSpark: List<Float> = emptyList(),
+    val achievements: List<Achievement> = emptyList(),
+    val highlights: List<Highlight> = emptyList(),
+    val topFans: List<TopFan> = emptyList(),
+    val recentBattles: List<BattleEntry> = emptyList(),
+    val gridVideos: List<VideoTile> = emptyList()
 )
 
 data class Achievement(val icon: ImageVector, val label: String, val sub: String?, val accent: Boolean)
@@ -199,6 +205,7 @@ fun ProfileScreen(
         var tab by remember { mutableStateOf(ProfileTab.Videos) }
         var filter by remember { mutableStateOf("Récents") }
         var langPickerOpen by remember { mutableStateOf(false) }
+        val scrollState = rememberScrollState()
 
         when {
             // Premier chargement échoué (aucune donnée) → erreur plein écran + retry.
@@ -213,10 +220,10 @@ fun ProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF050505))
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(contentPadding)
         ) {
-            CoverHeader(state = state, onOpenLangPicker = { langPickerOpen = true })
+            CoverHeader(state = state, scrollPx = scrollState.value, onOpenLangPicker = { langPickerOpen = true })
             IdentityBlock(
                 state = state,
                 subscribed = subscribed,
@@ -225,47 +232,51 @@ fun ProfileScreen(
                 onOpenWallet = onOpenWallet
             )
 
-            // Sections en cascade — chaque bloc apparaît avec un léger délai pour guider l'œil
-            // de haut en bas. Pas de stagger sur cover/identity (déjà visibles au premier paint).
-            StaggerReveal(index = 0) {
-                Column {
-                    SectionHeader(eyebrow = "Distinctions")
-                    HorizontalScrollRow(start = 16.dp, end = 16.dp) {
-                        state.achievements.forEach { AchievementPill(it) }
+            // Sections content-aware : on n'affiche que ce qui a réellement des données
+            // (backend). Le reste reste masqué tant que les endpoints n'existent pas.
+            if (state.achievements.isNotEmpty()) {
+                StaggerReveal(index = 0) {
+                    Column {
+                        SectionHeader(eyebrow = "Distinctions")
+                        HorizontalScrollRow(start = 16.dp, end = 16.dp) {
+                            state.achievements.forEach { AchievementPill(it) }
+                        }
                     }
                 }
             }
 
-            StaggerReveal(index = 1) {
-                Column {
-                    SectionHeader(eyebrow = "Séries", action = "Tout voir")
-                    HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 14.dp) {
-                        state.highlights.forEach { HighlightCircle(it) }
+            if (state.highlights.isNotEmpty()) {
+                StaggerReveal(index = 1) {
+                    Column {
+                        SectionHeader(eyebrow = "Séries", action = "Tout voir")
+                        HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 14.dp) {
+                            state.highlights.forEach { HighlightCircle(it) }
+                        }
                     }
                 }
             }
 
-            StaggerReveal(index = 2) {
-                Column {
-                    SectionHeader(eyebrow = "Top fans")
-                    HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 6.dp) {
-                        state.topFans.forEach { TopFanChip(it) }
+            if (state.topFans.isNotEmpty()) {
+                StaggerReveal(index = 2) {
+                    Column {
+                        SectionHeader(eyebrow = "Top fans")
+                        HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 6.dp) {
+                            state.topFans.forEach { TopFanChip(it) }
+                        }
                     }
                 }
             }
 
-            StaggerReveal(index = 3) {
-                DashboardCard(state = state)
-            }
-
-            StaggerReveal(index = 4) {
-                Column {
-                    SectionHeader(eyebrow = "Derniers Battles", action = "Historique")
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        state.recentBattles.forEach { BattleRow(it) }
+            if (state.recentBattles.isNotEmpty()) {
+                StaggerReveal(index = 4) {
+                    Column {
+                        SectionHeader(eyebrow = "Derniers Battles", action = "Historique")
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            state.recentBattles.forEach { BattleRow(it) }
+                        }
                     }
                 }
             }
@@ -274,7 +285,15 @@ fun ProfileScreen(
                 Column {
                     ContentTabs(active = tab, onTabChange = { tab = it })
                     FilterPills(selected = filter, onSelect = { filter = it })
-                    VideoGrid(videos = state.gridVideos)
+                    if (state.gridVideos.isEmpty()) {
+                        EmptyState(
+                            title = "Aucune vidéo pour l'instant",
+                            subtitle = "Tes vidéos publiées apparaîtront ici.",
+                            modifier = Modifier.padding(top = 28.dp, bottom = 16.dp)
+                        )
+                    } else {
+                        VideoGrid(videos = state.gridVideos)
+                    }
                 }
             }
 
@@ -340,7 +359,9 @@ private fun mergeRealProfile(
         tier = if (p.subscriptionTier.equals("free", ignoreCase = true)) "Tier Free"
         else "Tier " + p.subscriptionTier.replaceFirstChar { it.uppercase() },
         bio = p.bio?.takeIf { it.isNotBlank() } ?: base.bio,
+        avatarUrl = p.avatarUrl,
         followersFmt = formatCompact(p.followersCount),
+        videosFmt = formatCompact(p.followingCount), // pas de "vidéos" backend → on affiche les abonnements réels
         revenueFcfaFmt = formatThousands(p.walletBalance)
     )
 }
@@ -384,11 +405,19 @@ private fun LogoutButton(onClick: () -> Unit) {
 /* ---------- Cover ---------- */
 
 @Composable
-private fun CoverHeader(state: ProfileUiState, onOpenLangPicker: () -> Unit = {}) {
+private fun CoverHeader(state: ProfileUiState, scrollPx: Int = 0, onOpenLangPicker: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(170.dp)
+            .graphicsLayer {
+                // Parallax : le cover suit le scroll à demi-vitesse + léger zoom + fondu élégant.
+                translationY = scrollPx * 0.5f
+                val z = 1f + (scrollPx / 1600f).coerceIn(0f, 0.25f)
+                scaleX = z
+                scaleY = z
+                alpha = (1f - scrollPx / 520f).coerceIn(0.25f, 1f)
+            }
     ) {
         // Base gradient cinema
         Box(
@@ -490,54 +519,7 @@ private fun CoverHeader(state: ProfileUiState, onOpenLangPicker: () -> Unit = {}
             }
         }
 
-        // Live indicator (bottom-left) — dot pulsant + count-up sur les spectateurs
-        val liveTransition = rememberInfiniteTransition(label = "liveDotInf")
-        val dotAlpha by liveTransition.animateFloat(
-            initialValue = 0.35f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(700, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "liveDotAlpha"
-        )
-        val animatedViewers = rememberCountUp(targetValue = state.liveViewers, durationMs = 1500)
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color(0xFFE54646).copy(alpha = 0.95f))
-                    .padding(start = 6.dp, top = 4.dp, end = 10.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(5.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = dotAlpha))
-                )
-                Text(
-                    text = "EN DIRECT",
-                    color = Color.White,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.6.sp
-                )
-            }
-            Text(
-                text = "${"%,d".format(animatedViewers).replace(',', ' ')} spectateurs",
-                color = Color.White,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
+        // (Badge LIVE + spectateurs retirés : pas de backend live, et chevauchait l'avatar.)
     }
 }
 
@@ -580,7 +562,7 @@ private fun IdentityBlock(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            ProfileAvatar(name = state.displayName)
+            ProfileAvatar(name = state.displayName, avatarUrl = state.avatarUrl)
             StatsTrio(state = state)
         }
 
@@ -617,22 +599,24 @@ private fun IdentityBlock(
                     color = UnovColors.TextMute,
                     fontSize = 12.sp
                 )
-                Dot()
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Place,
-                        contentDescription = null,
-                        tint = UnovColors.TextMute,
-                        modifier = Modifier.size(10.dp)
-                    )
-                    Text(
-                        text = state.city,
-                        color = UnovColors.TextMute,
-                        fontSize = 12.sp
-                    )
+                if (state.city.isNotBlank()) {
+                    Dot()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Place,
+                            contentDescription = null,
+                            tint = UnovColors.TextMute,
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                            text = state.city,
+                            color = UnovColors.TextMute,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
                 Dot()
                 Text(
@@ -643,57 +627,67 @@ private fun IdentityBlock(
                 )
             }
 
-            Text(
-                text = state.bio,
-                color = UnovColors.TextDim,
-                fontSize = 13.sp,
-                lineHeight = 20.sp,
-                modifier = Modifier.padding(top = 12.dp)
-            )
-
-            // Link pills
-            Row(
-                modifier = Modifier.padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                LinkPill(
-                    icon = Icons.Outlined.Language,
-                    label = state.website,
-                    accent = true
+            if (state.bio.isNotBlank()) {
+                Text(
+                    text = state.bio,
+                    color = UnovColors.TextDim,
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    modifier = Modifier.padding(top = 12.dp)
                 )
-                LinkPill(icon = Icons.Outlined.Mail, label = "contact")
-                LinkPill(icon = Icons.Outlined.Phone, label = "WhatsApp")
             }
 
-            // Action bar : subscribe / battle / gift
+            // Link pills — affichés seulement si le site est renseigné (le reste viendra du backend).
+            if (state.website.isNotBlank()) {
+                Row(
+                    modifier = Modifier.padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LinkPill(
+                        icon = Icons.Outlined.Language,
+                        label = state.website,
+                        accent = true
+                    )
+                    LinkPill(icon = Icons.Outlined.Mail, label = "contact")
+                    LinkPill(icon = Icons.Outlined.Phone, label = "WhatsApp")
+                }
+            }
+
+            // Action bar — profil personnel : Modifier le profil + Partager.
             Row(
                 modifier = Modifier.padding(top = 18.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                SubscribeButton(
-                    subscribed = subscribed,
-                    onClick = onToggleSubscribe,
-                    modifier = Modifier.weight(2f)
-                )
-                GhostActionButton(
-                    icon = Icons.Outlined.Bolt,
-                    label = "Battle",
-                    onClick = onOpenBattle,
-                    modifier = Modifier.weight(1f)
-                )
                 Box(
                     modifier = Modifier
-                        .size(width = 46.dp, height = 48.dp)
+                        .weight(1f)
+                        .height(46.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .border(1.dp, UnovColors.Accent, RoundedCornerShape(14.dp))
+                        .background(UnovGradients.Gold)
+                        .clickable(onClick = onToggleSubscribe),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Modifier le profil",
+                        color = Color(0xFF0D0D0D),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(1.dp, UnovColors.LineStrong, RoundedCornerShape(14.dp))
                         .clickable(onClick = onOpenWallet),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.CardGiftcard,
-                        contentDescription = "Cadeau",
-                        tint = UnovColors.Accent,
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        text = "Partager",
+                        color = UnovColors.Text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -702,15 +696,23 @@ private fun IdentityBlock(
 }
 
 @Composable
-private fun ProfileAvatar(name: String) {
+private fun ProfileAvatar(name: String, avatarUrl: String?) {
+    // Anneau conique doré qui tourne lentement (signature premium).
+    val ringRotation by rememberInfiniteTransition(label = "avatarRing").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Restart),
+        label = "ringRot"
+    )
     Box(
         modifier = Modifier.size(96.dp),
         contentAlignment = Alignment.Center
     ) {
-        // Conic ring background
+        // Conic ring background (animé)
         Box(
             modifier = Modifier
                 .size(96.dp)
+                .rotate(ringRotation)
                 .clip(CircleShape)
                 .background(
                     Brush.sweepGradient(
@@ -723,7 +725,7 @@ private fun ProfileAvatar(name: String) {
                     )
                 )
         )
-        // Inner black ring
+        // Inner black ring + photo réelle (Coil) ou initiales
         Box(
             modifier = Modifier
                 .size(90.dp)
@@ -731,7 +733,16 @@ private fun ProfileAvatar(name: String) {
                 .background(Color(0xFF050505)),
             contentAlignment = Alignment.Center
         ) {
-            Avatar(idx = 0, name = name, size = 84.dp)
+            if (!avatarUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(84.dp).clip(CircleShape)
+                )
+            } else {
+                Avatar(idx = 0, name = name, size = 84.dp)
+            }
         }
         // Crown badge bottom-right
         Box(
@@ -771,8 +782,8 @@ private fun StatsTrio(state: ProfileUiState) {
         StatTile(
             value = state.followersFmt,
             label = "Abonnés",
-            trend = state.followersTrend,
-            sparkValues = state.followersSpark,
+            trend = null,
+            sparkValues = null,
             modifier = Modifier.weight(1f)
         )
         StatDivider()
@@ -780,14 +791,14 @@ private fun StatsTrio(state: ProfileUiState) {
             value = state.likesFmt,
             label = "J'aime",
             trend = null,
-            sparkValues = state.likesSpark,
+            sparkValues = null,
             modifier = Modifier.weight(1f)
         )
         StatDivider()
         StatTile(
             value = state.videosFmt,
-            label = "Vidéos",
-            trend = state.videosTrend,
+            label = "Suivis",
+            trend = null,
             sparkValues = null,
             modifier = Modifier.weight(1f)
         )
@@ -834,7 +845,8 @@ private fun StatTile(
                     color = UnovColors.TextMute,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Medium,
-                    letterSpacing = 1.0.sp
+                    letterSpacing = 0.6.sp,
+                    maxLines = 1
                 )
                 if (trend != null) {
                     Text(

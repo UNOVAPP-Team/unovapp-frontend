@@ -102,6 +102,7 @@ fun FeedItem(
     var followed by remember(video.id) { mutableStateOf(video.isFollowing) }
     var captionExpanded by remember(video.id) { mutableStateOf(false) }
     var progress by remember(video.id) { mutableFloatStateOf(0f) }
+    var moreOpen by remember(video.id) { mutableStateOf(false) }
 
     // Pause manuelle (tap sur la vidéo, façon TikTok). Réinitialisée quand on quitte la page.
     var userPaused by remember(video.id) { mutableStateOf(false) }
@@ -245,6 +246,7 @@ fun FeedItem(
             onCommentClick = onCommentClick,
             onGiftClick = onGiftClick,
             onShareClick = { shareVideo(context, video) },
+            onMoreClick = { moreOpen = true },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .graphicsLayer {
@@ -278,6 +280,10 @@ fun FeedItem(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 0.dp)
         )
+
+        if (moreOpen) {
+            MoreActionsSheet(video = video, onDismiss = { moreOpen = false })
+        }
     }
 }
 
@@ -383,6 +389,7 @@ private fun ActionRail(
     onCommentClick: () -> Unit,
     onGiftClick: () -> Unit,
     onShareClick: () -> Unit,
+    onMoreClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -423,7 +430,7 @@ private fun ActionRail(
         )
 
         // Overflow secondaire : Save, Signaler, Pas intéressé, Copier le lien
-        MoreButton(onClick = {})
+        MoreButton(onClick = onMoreClick)
     }
 }
 

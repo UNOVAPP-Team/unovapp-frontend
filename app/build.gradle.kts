@@ -155,6 +155,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // Coil — chargement d'images distantes (avatars, miniatures)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     // Media3 ExoPlayer + HLS (Mois 2 — pipeline vidéo)
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")

@@ -47,6 +47,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import com.unovapp.android.ui.theme.UnovGradients
+import kotlin.math.roundToInt
 import com.unovapp.android.ui.comments.CommentsSheet
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.wallet.WalletViewModel
@@ -190,43 +204,80 @@ private fun FeedHeader(
 
 @Composable
 private fun TabsRow(tab: FeedTab, onTabChange: (FeedTab) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-        FeedTab.values().reversed().forEach { t ->
-            TabItem(
-                label = t.label,
-                isActive = tab == t,
-                onClick = { onTabChange(t) }
-            )
+    val tabs = remember { FeedTab.values().reversed() }
+    val density = LocalDensity.current
+    // Position (x) et largeur de chaque onglet, mesurées au layout → indicateur glissant.
+    val lefts = remember { mutableStateListOf(*Array(tabs.size) { 0f }) }
+    val widths = remember { mutableStateListOf(*Array(tabs.size) { 0f }) }
+    val activeIndex = tabs.indexOf(tab).coerceAtLeast(0)
+
+    val animLeft by animateFloatAsState(
+        targetValue = lefts.getOrElse(activeIndex) { 0f },
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+        label = "indicatorLeft"
+    )
+    val animWidth by animateFloatAsState(
+        targetValue = widths.getOrElse(activeIndex) { 0f },
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+        label = "indicatorWidth"
+    )
+
+    Box {
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            tabs.forEachIndexed { i, t ->
+                TabItem(
+                    label = t.label,
+                    isActive = t == tab,
+                    onClick = { onTabChange(t) },
+                    onMeasured = { x, w -> lefts[i] = x; widths[i] = w }
+                )
+            }
         }
+        // Indicateur doré court qui glisse sous l'onglet actif (centré + spring).
+        val indWidthDp = 26.dp
+        val indWidthPx = with(density) { indWidthDp.toPx() }
+        val centeredLeft = animLeft + (animWidth - indWidthPx) / 2f
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .offset { IntOffset(centeredLeft.roundToInt(), 0) }
+                .width(indWidthDp)
+                .height(3.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(UnovGradients.Gold)
+        )
     }
 }
 
 @Composable
-private fun TabItem(label: String, isActive: Boolean, onClick: () -> Unit) {
+private fun TabItem(
+    label: String,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    onMeasured: (x: Float, width: Float) -> Unit
+) {
     val noRipple = remember { MutableInteractionSource() }
-    Box(
+    val scale by animateFloatAsState(
+        targetValue = if (isActive) 1.08f else 1f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMedium),
+        label = "tabScale"
+    )
+    val color by animateColorAsState(
+        targetValue = if (isActive) Color.White else UnovColors.TextDim.copy(alpha = 0.55f),
+        animationSpec = tween(260),
+        label = "tabColor"
+    )
+    Text(
+        text = label,
+        color = color,
+        fontSize = 16.sp,
+        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
         modifier = Modifier
+            .onGloballyPositioned { c -> onMeasured(c.positionInParent().x, c.size.width.toFloat()) }
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(interactionSource = noRipple, indication = null, onClick = onClick)
-            .padding(vertical = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            color = if (isActive) Color.White else UnovColors.TextDim.copy(alpha = 0.72f),
-            fontSize = 15.sp,
-            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium
-        )
-        AnimatedVisibility(visible = isActive) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 26.dp)
-                    .width(22.dp)
-                    .height(2.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(UnovColors.Accent)
-            )
-        }
-    }
+            .padding(vertical = 6.dp, horizontal = 2.dp)
+    )
 }
 
 @Composable
