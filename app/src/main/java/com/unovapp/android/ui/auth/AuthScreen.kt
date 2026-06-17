@@ -193,14 +193,9 @@ fun AuthScreen(
 ) {
     UnovAppTheme {
         val state by viewModel.state.collectAsStateWithLifecycle()
+        val context = LocalContext.current
         var pickerOpen by remember { mutableStateOf(false) }
-
-        // Deep link : un token de vérification email reçu → on valide auprès du backend.
-        LaunchedEffect(verifyEmailToken) {
-            if (!verifyEmailToken.isNullOrBlank()) {
-                viewModel.verifyEmailFromDeepLink(verifyEmailToken)
-            }
-        }
+        var forgotOpen by remember { mutableStateOf(false) }
 
         LaunchedEffect(state.step) {
             if (state.step == AuthStep.Success) {
@@ -266,11 +261,12 @@ fun AuthScreen(
                                             if (state.mode == AuthMode.Login) AuthMode.Register
                                             else AuthMode.Login
                                         )
-                                    }
+                                    },
+                                    onForgotPassword = { forgotOpen = true },
+                                    onGoogle = { viewModel.signInWithGoogle(context) }
                                 )
                                 AuthStep.Otp -> OtpStep(
-                                    country = state.country,
-                                    phone = state.phone,
+                                    email = state.email,
                                     otp = state.otp,
                                     onOtpDigitChange = viewModel::onOtpDigitChange,
                                     otpError = state.otpError,
@@ -278,11 +274,7 @@ fun AuthScreen(
                                     onResend = viewModel::resendOtp,
                                     onSkip = viewModel::skipOtp
                                 )
-                                AuthStep.VerifyEmail -> VerifyEmailStep(
-                                    email = state.email,
-                                    isLoading = state.isLoading,
-                                    onResend = viewModel::resendVerificationEmail
-                                )
+                                AuthStep.VerifyEmail -> Unit
                                 AuthStep.Success -> Unit
                             }
                         }
@@ -316,7 +308,7 @@ fun AuthScreen(
                                 AuthStep.Welcome -> viewModel.chooseMode(AuthMode.Register)
                                 AuthStep.Form -> viewModel.submitForm()
                                 AuthStep.Otp -> viewModel.verifyOtp()
-                                AuthStep.VerifyEmail -> viewModel.proceedToLogin()
+                                AuthStep.VerifyEmail -> Unit
                                 AuthStep.Success -> Unit
                             }
                         }
@@ -333,6 +325,15 @@ fun AuthScreen(
                     pickerOpen = false
                 },
                 onClose = { pickerOpen = false }
+            )
+        }
+
+        if (forgotOpen) {
+            ForgotPasswordScreen(
+                initialEmail = state.email,
+                onForgot = viewModel::forgotPassword,
+                onReset = viewModel::resetPassword,
+                onDismiss = { forgotOpen = false }
             )
         }
     }
@@ -569,7 +570,9 @@ private fun FormStep(
     onPasswordChange: (String) -> Unit,
     onCountryClick: () -> Unit,
     onPhoneChange: (String) -> Unit,
-    onSwitchMode: () -> Unit
+    onSwitchMode: () -> Unit,
+    onForgotPassword: () -> Unit,
+    onGoogle: () -> Unit
 ) {
     val isRegister = state.mode == AuthMode.Register
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -640,6 +643,20 @@ private fun FormStep(
             )
         }
 
+        if (!isRegister) {
+            Text(
+                text = "Mot de passe oublié ?",
+                color = UnovColors.Accent,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onForgotPassword)
+                    .padding(horizontal = 4.dp, vertical = 8.dp)
+            )
+        }
+
         if (isRegister) {
             Spacer(modifier = Modifier.height(16.dp))
             LabeledField(label = stringResource(R.string.auth_label_phone)) {
@@ -690,7 +707,51 @@ private fun FormStep(
             )
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Séparateur "ou"
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f).height(1.dp).background(UnovColors.Line))
+            Text(
+                text = "ou",
+                color = UnovColors.TextMute,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+            Box(Modifier.weight(1f).height(1.dp).background(UnovColors.Line))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        GoogleButton(onClick = onGoogle)
         Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun GoogleButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, UnovColors.LineStrong, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "G",
+            color = UnovColors.Accent,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = "Continuer avec Google",
+            color = UnovColors.Text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -770,8 +831,7 @@ private fun VerifyEmailStep(
 
 @Composable
 private fun OtpStep(
-    country: Country,
-    phone: String,
+    email: String,
     otp: List<String>,
     onOtpDigitChange: (Int, String) -> Unit,
     otpError: String?,
@@ -805,9 +865,9 @@ private fun OtpStep(
         )
         Text(
             text = buildAnnotatedString {
-                append("Au ")
+                append("Envoyé à ")
                 withStyle(SpanStyle(color = UnovColors.Text, fontWeight = FontWeight.Medium)) {
-                    append("${country.code} ${country.format(phone)}")
+                    append(email)
                 }
                 append(".")
             },

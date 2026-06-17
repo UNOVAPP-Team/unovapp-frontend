@@ -1,5 +1,6 @@
 package com.unovapp.android.ui.auth
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.unovapp.android.data.auth.AuthRepository
@@ -77,9 +78,6 @@ enum class RetryAction { SubmitForm, SendOtp, VerifyOtp }
 
 private const val OTP_LENGTH = 6
 private const val RESEND_COUNTDOWN_SEC = 60
-
-/** Code de vérification téléphone de TEST (backend OTP pas encore prêt). À retirer plus tard. */
-private const val MOCK_OTP = "123456"
 private val EMAIL_REGEX = Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
 
 @HiltViewModel
@@ -183,79 +181,117 @@ class AuthViewModel @Inject constructor(
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, networkError = null) }
-            val result = when (s.mode) {
-                AuthMode.Login -> repository.login(s.email, s.password)
-                AuthMode.Register -> repository.register(
+            if (s.mode == AuthMode.Login) {
+                when (val r = repository.login(s.email, s.password)) {
+                    is NetworkResult.Success ->
+                        _state.update { it.copy(step = AuthStep.Success, isLoading = false) }
+                    is NetworkResult.Failure ->
+                        handleAuthError(r.error, RetryAction.SubmitForm)
+                }
+            } else {
+                // Inscription : le backend envoie un code OTP par EMAIL → étape de saisie du code.
+                val r = repository.register(
                     email = s.email,
                     username = s.username,
                     password = s.password,
-                    // Téléphone facultatif : on omet le champ s'il est vide (évite un 400/500 backend).
                     phoneNumber = if (s.phoneProvided) s.phoneE164 else null
                 )
-            }
-            when (result) {
-                is NetworkResult.Success -> {
-                    if (s.mode == AuthMode.Register) {
-                        if (s.phoneProvided) {
-                            // Vérif téléphone MOCKÉE (backend OTP pas prêt) : code de test 123456.
-                            _state.update {
-                                it.copy(
-                                    step = AuthStep.Otp,
-                                    isLoading = false,
-                                    otp = List(OTP_LENGTH) { "" },
-                                    otpError = null,
-                                    countdown = RESEND_COUNTDOWN_SEC,
-                                    networkError = null,
-                                    infoMessage = "Code de vérification de test : $MOCK_OTP"
-                                )
-                            }
-                            startCountdown()
-                        } else {
-                            // Pas de téléphone → directement la vérification email.
-                            _state.update {
-                                it.copy(step = AuthStep.VerifyEmail, isLoading = false, networkError = null)
-                            }
-                            repository.sendEmailVerification()
-                        }
-                    } else {
-                        _state.update { it.copy(step = AuthStep.Success, isLoading = false) }
-                    }
-                }
-                is NetworkResult.Failure -> {
-                    // À l'inscription, un 409 (ou un 500 dû au bug backend sur doublon de
-                    // téléphone) signifie presque toujours un identifiant déjà pris.
-                    if (s.mode == AuthMode.Register && result.error.isLikelyDuplicate()) {
+                when (r) {
+                    is NetworkResult.Success -> {
                         _state.update {
                             it.copy(
+                                step = AuthStep.Otp,
                                 isLoading = false,
-                                networkError = "${result.error.debugDetail}\n→ email, pseudo ou numéro peut-être déjà utilisé ?",
-                                retryAction = null
+                                otp = List(OTP_LENGTH) { "" },
+                                otpError = null,
+                                countdown = RESEND_COUNTDOWN_SEC,
+                                networkError = null,
+                                infoMessage = "Code à 6 chiffres envoyé à ${s.email}"
                             )
                         }
-                    } else {
-                        handleAuthError(result.error, RetryAction.SubmitForm)
+                        startCountdown()
+                    }
+                    is NetworkResult.Failure -> {
+                        if (r.error.isLikelyDuplicate()) {
+                            _state.update {
+                                it.copy(
+                                    isLoading = false,
+                                    networkError = "${r.error.debugDetail}\n→ email, pseudo ou numéro peut-être déjà utilisé ?",
+                                    retryAction = null
+                                )
+                            }
+                        } else {
+                            handleAuthError(r.error, RetryAction.SubmitForm)
+                        }
                     }
                 }
             }
         }
     }
 
-    /** MOCK : pas d'envoi réel de SMS — on réinitialise juste le compte à rebours. */
-    fun resendOtp() {
-        _state.update {
-            it.copy(
-                otp = List(OTP_LENGTH) { "" },
-                otpError = null,
-                countdown = RESEND_COUNTDOWN_SEC,
-                infoMessage = "Code de test : $MOCK_OTP"
-            )
+    /* ---------- Google + mot de passe oublié ---------- */
+
+    /** Connexion via Google (Credential Manager → /auth/google). */
+    fun signInWithGoogle(context: Context) {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true, networkError = null) }
+            when (val r = repository.loginWithGoogle(context)) {
+                is NetworkResult.Success ->
+                    _state.update { it.copy(step = AuthStep.Success, isLoading = false) }
+                is NetworkResult.Failure ->
+                    _state.update { it.copy(isLoading = false, networkError = r.error.userMessage) }
+            }
         }
-        startCountdown()
+    }
+
+    /** Demande l'email de réinitialisation du mot de passe. */
+    fun forgotPassword(email: String, onDone: (error: String?) -> Unit) {
+        viewModelScope.launch {
+            when (val r = repository.forgotPassword(email)) {
+                is NetworkResult.Success -> onDone(null)
+                is NetworkResult.Failure -> onDone(r.error.debugDetail)
+            }
+        }
+    }
+
+    /** Réinitialise le mot de passe avec le token reçu par email. */
+    fun resetPassword(token: String, newPassword: String, onDone: (error: String?) -> Unit) {
+        viewModelScope.launch {
+            when (val r = repository.resetPassword(token, newPassword)) {
+                is NetworkResult.Success -> onDone(null)
+                is NetworkResult.Failure -> onDone(r.error.debugDetail)
+            }
+        }
+    }
+
+    /** Renvoie un nouveau code OTP par email (relance l'inscription). */
+    fun resendOtp() {
+        val s = _state.value
+        viewModelScope.launch {
+            _state.update { it.copy(otp = List(OTP_LENGTH) { "" }, otpError = null, isLoading = true) }
+            when (val r = repository.register(
+                s.email, s.username, s.password,
+                if (s.phoneProvided) s.phoneE164 else null
+            )) {
+                is NetworkResult.Success -> {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            countdown = RESEND_COUNTDOWN_SEC,
+                            networkError = null,
+                            infoMessage = "Nouveau code envoyé à ${s.email}"
+                        )
+                    }
+                    startCountdown()
+                }
+                is NetworkResult.Failure ->
+                    _state.update { it.copy(isLoading = false, networkError = r.error.debugDetail) }
+            }
+        }
     }
 
     /**
-     * MOCK de la vérification téléphone : le backend OTP n'étant pas prêt, on accepte
-     * uniquement le code de test [MOCK_OTP]. En cas de succès → vérification email.
+     * Vérifie le code OTP reçu par email → finalise le compte et ouvre la session (tokens).
      */
     fun verifyOtp() {
         val s = _state.value
@@ -264,95 +300,44 @@ class AuthViewModel @Inject constructor(
             return
         }
         val code = s.otp.joinToString("")
-        if (code != MOCK_OTP) {
-            _state.update {
-                it.copy(
-                    otpError = "Code incorrect. Utilise $MOCK_OTP (vérification de test).",
-                    otp = List(OTP_LENGTH) { "" }
-                )
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true, networkError = null) }
+            when (val r = repository.verifyEmail(s.email, code)) {
+                is NetworkResult.Success -> {
+                    countdownJob?.cancel()
+                    _state.update {
+                        it.copy(step = AuthStep.Success, isLoading = false, otpError = null, retryAction = null)
+                    }
+                }
+                is NetworkResult.Failure -> {
+                    val err = r.error
+                    if (err is ApiError.Business && err.httpStatus in 400..499) {
+                        _state.update {
+                            it.copy(
+                                isLoading = false,
+                                otpError = err.userMessage,
+                                otp = List(OTP_LENGTH) { "" }
+                            )
+                        }
+                    } else {
+                        handleAuthError(err, RetryAction.VerifyOtp)
+                    }
+                }
             }
-            return
         }
-        countdownJob?.cancel()
-        _state.update {
-            it.copy(
-                step = AuthStep.VerifyEmail,
-                isLoading = false,
-                otpError = null,
-                networkError = null,
-                infoMessage = null,
-                retryAction = null
-            )
-        }
-        viewModelScope.launch { repository.sendEmailVerification() }
     }
 
-    /** L'utilisateur passe la vérif téléphone → on enchaîne sur la vérification email. */
+    /** Annule la vérification — le compte n'est créé qu'une fois le code validé. */
     fun skipOtp() {
         countdownJob?.cancel()
         _state.update {
-            it.copy(step = AuthStep.VerifyEmail, networkError = null, otpError = null, infoMessage = null)
-        }
-        viewModelScope.launch { repository.sendEmailVerification() }
-    }
-
-    /* ---------- Vérification email ---------- */
-
-    /** Renvoie l'email de vérification au compte courant. */
-    fun resendVerificationEmail() {
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, networkError = null, infoMessage = null) }
-            when (val r = repository.sendEmailVerification()) {
-                is NetworkResult.Success -> _state.update {
-                    it.copy(isLoading = false, infoMessage = "Email de vérification renvoyé à ${it.email}.")
-                }
-                is NetworkResult.Failure -> _state.update {
-                    it.copy(isLoading = false, networkError = r.error.debugDetail)
-                }
-            }
-        }
-    }
-
-    /**
-     * Valide l'email à partir du token reçu par deep link (lien cliqué dans l'email).
-     * En cas de succès, on bascule vers la connexion (email pré-rempli).
-     */
-    fun verifyEmailFromDeepLink(token: String) {
-        viewModelScope.launch {
-            _state.update {
-                it.copy(step = AuthStep.VerifyEmail, isLoading = true, networkError = null, infoMessage = null)
-            }
-            when (val r = repository.verifyEmail(token)) {
-                is NetworkResult.Success -> {
-                    _state.update { it.copy(emailVerified = true, infoMessage = "Email vérifié ✓") }
-                    proceedToLogin()
-                }
-                is NetworkResult.Failure -> _state.update {
-                    it.copy(isLoading = false, networkError = "Lien invalide ou expiré. ${r.error.debugDetail}")
-                }
-            }
-        }
-    }
-
-    /**
-     * Termine l'inscription : on efface la session locale (le compte existe côté backend)
-     * et on renvoie l'utilisateur vers l'écran de connexion, email pré-rempli.
-     */
-    fun proceedToLogin() {
-        viewModelScope.launch {
-            repository.clearSession()
-            _state.update {
-                it.copy(
-                    mode = AuthMode.Login,
-                    step = AuthStep.Form,
-                    password = "",
-                    otp = List(OTP_LENGTH) { "" },
-                    isLoading = false,
-                    networkError = null,
-                    retryAction = null,
-                    infoMessage = if (it.emailVerified) "Email vérifié ✓ — connecte-toi." else null
-                )
-            }
+            it.copy(
+                step = AuthStep.Welcome,
+                otp = List(OTP_LENGTH) { "" },
+                otpError = null,
+                networkError = null,
+                infoMessage = null
+            )
         }
     }
 

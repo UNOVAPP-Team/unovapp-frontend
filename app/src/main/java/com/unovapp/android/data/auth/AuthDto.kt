@@ -25,8 +25,27 @@ data class VerifyOtpRequest(
     val code: String
 )
 
+/** Vérification du code OTP reçu par email — finalise l'inscription. */
+data class VerifyEmailRequest(
+    val email: String,
+    @SerializedName("otp_code") val otpCode: String
+)
+
 data class RefreshTokenRequest(
     @SerializedName("refresh_token") val refreshToken: String
+)
+
+data class GoogleSignInRequest(
+    @SerializedName("id_token") val idToken: String
+)
+
+data class ForgotPasswordRequest(
+    val email: String
+)
+
+data class ResetPasswordRequest(
+    val token: String,
+    val newPassword: String
 )
 
 /* ---------- Réponses ----------

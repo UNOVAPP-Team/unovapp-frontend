@@ -21,7 +21,10 @@ data class ProfileNetworkState(
     val profile: UserProfileDto? = null,
     val error: String? = null,
     /** Session invalide/expirée (401) → l'UI doit rediriger vers la connexion. */
-    val sessionExpired: Boolean = false
+    val sessionExpired: Boolean = false,
+    // Édition du profil
+    val saving: Boolean = false,
+    val saveError: String? = null
 )
 
 @HiltViewModel
@@ -53,6 +56,24 @@ class ProfileViewModel @Inject constructor(
             }
         }
     }
+
+    /** Met à jour le profil (display_name, bio, username) via PATCH /users/{id}. */
+    fun updateProfile(displayName: String, bio: String, username: String, onSaved: () -> Unit) {
+        val id = _state.value.profile?.id ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(saving = true, saveError = null) }
+            when (val r = userRepository.updateProfile(id, displayName, bio, username)) {
+                is NetworkResult.Success -> {
+                    _state.update { it.copy(saving = false, profile = r.data, saveError = null) }
+                    onSaved()
+                }
+                is NetworkResult.Failure ->
+                    _state.update { it.copy(saving = false, saveError = r.error.debugDetail) }
+            }
+        }
+    }
+
+    fun clearSaveError() = _state.update { it.copy(saveError = null) }
 
     /** Déconnexion : efface la session (best-effort backend) puis notifie l'UI. */
     fun logout(onDone: () -> Unit) {

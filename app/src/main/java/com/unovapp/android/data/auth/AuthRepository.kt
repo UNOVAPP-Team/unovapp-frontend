@@ -1,5 +1,6 @@
 package com.unovapp.android.data.auth
 
+import android.content.Context
 import com.unovapp.android.TokenDataStore
 import com.unovapp.android.data.network.ApiError
 import com.unovapp.android.data.network.NetworkResult
@@ -9,24 +10,31 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 interface AuthRepository {
+    /** Démarre l'inscription : le backend envoie un code OTP par email. Pas de tokens encore. */
     suspend fun register(
         email: String,
         username: String,
         password: String,
         phoneNumber: String?
-    ): NetworkResult<AuthSession>
+    ): NetworkResult<Unit>
+
+    /** Vérifie le code OTP reçu par email → finalise le compte et ouvre la session. */
+    suspend fun verifyEmail(email: String, otpCode: String): NetworkResult<AuthSession>
 
     suspend fun login(email: String, password: String): NetworkResult<AuthSession>
+
+    /** Connexion Google (Credential Manager → /auth/google). */
+    suspend fun loginWithGoogle(context: Context): NetworkResult<AuthSession>
+
+    /** Demande un email de réinitialisation de mot de passe. */
+    suspend fun forgotPassword(email: String): NetworkResult<Unit>
+
+    /** Réinitialise le mot de passe avec le token reçu par email. */
+    suspend fun resetPassword(token: String, newPassword: String): NetworkResult<Unit>
 
     suspend fun sendOtp(phoneNumber: String): NetworkResult<Unit>
 
     suspend fun verifyOtp(phoneNumber: String, code: String): NetworkResult<Unit>
-
-    /** (Re)envoie l'email de vérification au compte courant (Bearer requis). */
-    suspend fun sendEmailVerification(): NetworkResult<Unit>
-
-    /** Valide l'email via le token reçu (lien email / deep link). */
-    suspend fun verifyEmail(token: String): NetworkResult<Unit>
 
     suspend fun fetchMe(): NetworkResult<MeResponse>
 
@@ -51,7 +59,8 @@ interface AuthRepository {
  */
 class AuthRepositoryImpl(
     private val api: AuthApi,
-    private val tokenStore: TokenDataStore
+    private val tokenStore: TokenDataStore,
+    private val googleSignInHelper: GoogleSignInHelper
 ) : AuthRepository {
 
     override suspend fun register(
@@ -59,8 +68,9 @@ class AuthRepositoryImpl(
         username: String,
         password: String,
         phoneNumber: String?
-    ): NetworkResult<AuthSession> = safeCall {
-        val tokens = api.register(
+    ): NetworkResult<Unit> = safeCall {
+        // Le backend envoie un code OTP par email. Aucun token à ce stade.
+        api.register(
             RegisterRequest(
                 email = email,
                 username = username,
@@ -68,12 +78,17 @@ class AuthRepositoryImpl(
                 phoneNumber = phoneNumber
             )
         )
-        // Sauvegarder le token AVANT le /me — l'interceptor en a besoin pour l'appel suivant.
-        tokenStore.saveTokens(tokens.accessToken, tokens.refreshToken)
-        val me = api.me()
-        tokenStore.saveSession(tokens.accessToken, tokens.refreshToken, me.userId)
-        tokens.toSessionWithMe(me)
+        Unit
     }
+
+    override suspend fun verifyEmail(email: String, otpCode: String): NetworkResult<AuthSession> =
+        safeCall {
+            val tokens = api.verifyEmail(VerifyEmailRequest(email = email, otpCode = otpCode))
+            tokenStore.saveTokens(tokens.accessToken, tokens.refreshToken)
+            val me = api.me()
+            tokenStore.saveSession(tokens.accessToken, tokens.refreshToken, me.userId)
+            tokens.toSessionWithMe(me)
+        }
 
     override suspend fun login(email: String, password: String): NetworkResult<AuthSession> =
         safeCall {
@@ -83,6 +98,29 @@ class AuthRepositoryImpl(
             tokenStore.saveSession(tokens.accessToken, tokens.refreshToken, me.userId)
             tokens.toSessionWithMe(me)
         }
+
+    override suspend fun loginWithGoogle(context: Context): NetworkResult<AuthSession> {
+        return when (val idr = googleSignInHelper.requestIdToken(context)) {
+            is NetworkResult.Failure -> NetworkResult.Failure(idr.error)
+            is NetworkResult.Success -> safeCall {
+                val tokens = api.google(GoogleSignInRequest(idToken = idr.data))
+                tokenStore.saveTokens(tokens.accessToken, tokens.refreshToken)
+                val me = api.me()
+                tokenStore.saveSession(tokens.accessToken, tokens.refreshToken, me.userId)
+                tokens.toSessionWithMe(me)
+            }
+        }
+    }
+
+    override suspend fun forgotPassword(email: String): NetworkResult<Unit> = safeCall {
+        api.forgotPassword(ForgotPasswordRequest(email = email))
+        Unit
+    }
+
+    override suspend fun resetPassword(token: String, newPassword: String): NetworkResult<Unit> = safeCall {
+        api.resetPassword(ResetPasswordRequest(token = token, newPassword = newPassword))
+        Unit
+    }
 
     override suspend fun sendOtp(phoneNumber: String): NetworkResult<Unit> = safeCall {
         api.sendOtp(SendOtpRequest(phoneNumber = phoneNumber))
@@ -94,16 +132,6 @@ class AuthRepositoryImpl(
             api.verifyOtp(VerifyOtpRequest(phoneNumber = phoneNumber, code = code))
             Unit
         }
-
-    override suspend fun sendEmailVerification(): NetworkResult<Unit> = safeCall {
-        api.sendEmailVerification().close()
-        Unit
-    }
-
-    override suspend fun verifyEmail(token: String): NetworkResult<Unit> = safeCall {
-        api.verifyEmail(token).close()
-        Unit
-    }
 
     override suspend fun fetchMe(): NetworkResult<MeResponse> = safeCall { api.me() }
 
@@ -136,11 +164,26 @@ class AuthRepositoryStub(
         username: String,
         password: String,
         phoneNumber: String?
-    ): NetworkResult<AuthSession> {
+    ): NetworkResult<Unit> {
         delay(800)
-        val session = fakeSession(userIdFrom = email)
-        tokenStore.saveSession(session.accessToken, session.refreshToken, session.userId)
-        return NetworkResult.Success(session)
+        return NetworkResult.Success(Unit)
+    }
+
+    override suspend fun verifyEmail(email: String, otpCode: String): NetworkResult<AuthSession> {
+        delay(700)
+        return if (otpCode == "123456") {
+            val session = fakeSession(userIdFrom = email)
+            tokenStore.saveSession(session.accessToken, session.refreshToken, session.userId)
+            NetworkResult.Success(session)
+        } else {
+            NetworkResult.Failure(
+                ApiError.Business(
+                    code = "OTP_INVALID",
+                    userMessage = "Code incorrect ou expiré.",
+                    httpStatus = 400
+                )
+            )
+        }
     }
 
     override suspend fun login(email: String, password: String): NetworkResult<AuthSession> {
@@ -157,6 +200,23 @@ class AuthRepositoryStub(
         val session = fakeSession(userIdFrom = email)
         tokenStore.saveSession(session.accessToken, session.refreshToken, session.userId)
         return NetworkResult.Success(session)
+    }
+
+    override suspend fun loginWithGoogle(context: Context): NetworkResult<AuthSession> {
+        delay(400)
+        return NetworkResult.Failure(
+            ApiError.Business(code = "GOOGLE_STUB", userMessage = "Google indisponible en mode démo.", httpStatus = 0)
+        )
+    }
+
+    override suspend fun forgotPassword(email: String): NetworkResult<Unit> {
+        delay(500)
+        return NetworkResult.Success(Unit)
+    }
+
+    override suspend fun resetPassword(token: String, newPassword: String): NetworkResult<Unit> {
+        delay(500)
+        return NetworkResult.Success(Unit)
     }
 
     override suspend fun sendOtp(phoneNumber: String): NetworkResult<Unit> {
@@ -177,16 +237,6 @@ class AuthRepositoryStub(
                 )
             )
         }
-    }
-
-    override suspend fun sendEmailVerification(): NetworkResult<Unit> {
-        delay(400)
-        return NetworkResult.Success(Unit)
-    }
-
-    override suspend fun verifyEmail(token: String): NetworkResult<Unit> {
-        delay(400)
-        return NetworkResult.Success(Unit)
     }
 
     override suspend fun fetchMe(): NetworkResult<MeResponse> = NetworkResult.Success(

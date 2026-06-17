@@ -1,19 +1,21 @@
 package com.unovapp.android.data.auth
 
-import okhttp3.ResponseBody
 import retrofit2.http.Body
-import retrofit2.http.GET
 import retrofit2.http.POST
-import retrofit2.http.Query
 
 /**
  * Endpoints Auth UNOVAPP — alignés sur l'OpenAPI du service `unovapp-auth`.
  * Voir : https://unovapp-auth.onrender.com/api/docs
+ *
+ * Flux d'inscription (nouveau contrat backend) :
+ *  1. register(email, username, password, phone?) → envoie un CODE OTP par EMAIL (message, pas de tokens)
+ *  2. verifyEmail(email, otp_code) → finalise le compte et renvoie les tokens
  */
 interface AuthApi {
 
+    /** Démarre l'inscription : envoie un code OTP par email. Ne renvoie PAS de tokens. */
     @POST("auth/register")
-    suspend fun register(@Body body: RegisterRequest): TokensResponse
+    suspend fun register(@Body body: RegisterRequest): MessageResponse
 
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): TokensResponse
@@ -36,14 +38,19 @@ interface AuthApi {
     @POST("auth/verify-otp")
     suspend fun verifyOtp(@Body body: VerifyOtpRequest): MessageResponse
 
-    /** Bearer requis. (Re)envoie l'email de vérification au compte courant. */
-    @POST("auth/send-email-verification")
-    suspend fun sendEmailVerification(): ResponseBody
+    /** Publique. Vérifie le code OTP reçu par email et finalise le compte → tokens. */
+    @POST("auth/verify-email")
+    suspend fun verifyEmail(@Body body: VerifyEmailRequest): TokensResponse
 
-    /**
-     * Publique. Valide l'email via le token reçu par email (lien cliqué / deep link).
-     * Réponse non typée (peut être HTML/texte) → on ne lit pas le corps, juste le statut 2xx.
-     */
-    @GET("auth/verify-email")
-    suspend fun verifyEmail(@Query("token") token: String): ResponseBody
+    /** Publique. Connexion via un ID Token Google → tokens UNOVAPP. */
+    @POST("auth/google")
+    suspend fun google(@Body body: GoogleSignInRequest): TokensResponse
+
+    /** Publique. Demande un lien/token de réinitialisation par email. */
+    @POST("auth/forgot-password")
+    suspend fun forgotPassword(@Body body: ForgotPasswordRequest): MessageResponse
+
+    /** Publique. Réinitialise le mot de passe avec le token reçu par email. */
+    @POST("auth/reset-password")
+    suspend fun resetPassword(@Body body: ResetPasswordRequest): MessageResponse
 }

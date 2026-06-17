@@ -23,8 +23,8 @@ android {
         applicationId = "com.unovapp.android"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 5
+        versionName = "1.4"
 
         buildConfigField(
             "String",
@@ -63,10 +63,15 @@ android {
 
     buildTypes {
         release {
-            // Minification désactivée pour ce premier test interne : évite tout risque
-            // R8/Gson sur les DTO Retrofit. À réactiver (isMinifyEnabled = true) + règles
-            // ProGuard avant la mise en production publique.
-            isMinifyEnabled = false
+            // R8 activé : réduit le code mort + supprime les ressources inutilisées
+            // (taille de l'AAB nettement réduite). Règles -keep dans proguard-rules.pro
+            // pour protéger Gson/Retrofit/Hilt de l'obfuscation.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = if (keystorePropsFile.exists()) {
                 signingConfigs.getByName("release")
             } else {

@@ -30,6 +30,14 @@ data class UserSummaryDto(
     @SerializedName("is_verified") val isVerified: Boolean = false
 )
 
+/** Corps du PATCH /users/{id} — modification du profil (champs texte). */
+data class UpdateProfileRequest(
+    @SerializedName("display_name") val displayName: String? = null,
+    val bio: String? = null,
+    val username: String? = null,
+    @SerializedName("avatar_s3_key") val avatarS3Key: String? = null
+)
+
 /** Enveloppe paginée standard du backend : { data, total, page, limit }. */
 data class PagedResponse<T>(
     val data: List<T> = emptyList(),

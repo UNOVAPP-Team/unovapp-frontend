@@ -4,6 +4,7 @@ import com.unovapp.android.data.auth.AuthApi
 import com.unovapp.android.data.auth.AuthRepository
 import com.unovapp.android.data.auth.AuthRepositoryImpl
 import com.unovapp.android.data.auth.AuthRepositoryStub
+import com.unovapp.android.data.auth.GoogleSignInHelper
 import com.unovapp.android.data.network.AuthInterceptor
 import com.unovapp.android.data.network.RetryInterceptor
 import com.unovapp.android.data.network.TokenAuthenticator
@@ -102,8 +103,9 @@ object NetworkModule {
     @Singleton
     fun provideAuthRepository(
         api: AuthApi,
-        tokenStore: TokenDataStore
+        tokenStore: TokenDataStore,
+        googleSignInHelper: GoogleSignInHelper
     ): AuthRepository =
         if (BuildConfig.USE_STUB_AUTH) AuthRepositoryStub(tokenStore)
-        else AuthRepositoryImpl(api, tokenStore)
+        else AuthRepositoryImpl(api, tokenStore, googleSignInHelper)
 }

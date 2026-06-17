@@ -205,6 +205,7 @@ fun ProfileScreen(
         var tab by remember { mutableStateOf(ProfileTab.Videos) }
         var filter by remember { mutableStateOf("Récents") }
         var langPickerOpen by remember { mutableStateOf(false) }
+        var editOpen by remember { mutableStateOf(false) }
         val scrollState = rememberScrollState()
 
         when {
@@ -229,7 +230,8 @@ fun ProfileScreen(
                 subscribed = subscribed,
                 onToggleSubscribe = { subscribed = !subscribed },
                 onOpenBattle = onOpenBattle,
-                onOpenWallet = onOpenWallet
+                onOpenWallet = onOpenWallet,
+                onEditProfile = { editOpen = true }
             )
 
             // Sections content-aware : on n'affiche que ce qui a réellement des données
@@ -308,6 +310,20 @@ fun ProfileScreen(
             LanguagePickerSheet(onDismiss = { langPickerOpen = false })
         }
             }
+        }
+
+        if (editOpen) {
+            val p = net.profile
+            EditProfileScreen(
+                initialDisplayName = p?.displayName?.takeIf { it.isNotBlank() } ?: p?.username ?: "",
+                initialUsername = p?.username ?: "",
+                initialBio = p?.bio ?: "",
+                avatarUrl = p?.avatarUrl,
+                saving = net.saving,
+                error = net.saveError,
+                onSave = { dn, un, b -> viewModel.updateProfile(dn, b, un) { editOpen = false } },
+                onDismiss = { viewModel.clearSaveError(); editOpen = false }
+            )
         }
     }
 }
@@ -551,7 +567,8 @@ private fun IdentityBlock(
     subscribed: Boolean,
     onToggleSubscribe: () -> Unit,
     onOpenBattle: () -> Unit,
-    onOpenWallet: () -> Unit
+    onOpenWallet: () -> Unit,
+    onEditProfile: () -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         // Avatar (overlaps cover) + stats
@@ -664,7 +681,7 @@ private fun IdentityBlock(
                         .height(46.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(UnovGradients.Gold)
-                        .clickable(onClick = onToggleSubscribe),
+                        .clickable(onClick = onEditProfile),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(

@@ -35,6 +35,7 @@ class AuthInterceptor(
         private val PUBLIC_PATHS = listOf(
             "/auth/login",
             "/auth/register",
+            "/auth/verify-email",
             "/auth/refresh",
             "/auth/send-otp"
         )
