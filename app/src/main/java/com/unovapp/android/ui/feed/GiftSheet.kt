@@ -2,10 +2,10 @@ package com.unovapp.android.ui.feed
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.StartOffset
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,8 @@ import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
 import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.sin
 
 /** Un cadeau-sticker : emoji animé, nom, prix (FCFA). */
 data class GiftSticker(val emoji: String, val name: String, val price: Int)
@@ -87,19 +90,54 @@ fun GiftSheet(
     onSend: (GiftSticker) -> Unit,
     onRecharge: (deficit: Long) -> Unit
 ) {
-    var shown by remember { mutableStateOf(false) }
+    // `visible` pilote l'entrée ET la sortie (scrim + slide). `entered` est un verrou qui
+    // ne sert qu'à la cascade d'apparition des tuiles : il reste vrai pendant la sortie
+    // pour que les stickers glissent avec le panneau au lieu de re-rétrécir.
+    var visible by remember { mutableStateOf(false) }
+    var entered by remember { mutableStateOf(false) }
     var selected by remember { mutableIntStateOf(-1) }
-    LaunchedEffect(Unit) { shown = true }
+    // Action terminale jouée une fois la sortie finie (fermer / envoyer / recharger).
+    var pendingExit by remember { mutableStateOf<(() -> Unit)?>(null) }
+    LaunchedEffect(Unit) { visible = true; entered = true }
+
+    // Lance le slide-down + fondu du scrim, puis exécute [action] à la fin (voir finishedListener).
+    fun beginExit(action: () -> Unit) {
+        if (pendingExit != null) return // sortie déjà en cours — on ignore les taps répétés
+        pendingExit = action
+        visible = false
+    }
 
     val scrimAlpha by animateFloatAsState(
-        targetValue = if (shown) 0.62f else 0f,
+        targetValue = if (visible) 0.62f else 0f,
         animationSpec = tween(260),
         label = "scrim"
     )
     val panelOffset by animateDpAsState(
-        targetValue = if (shown) 0.dp else 720.dp,
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow),
+        targetValue = if (visible) 0.dp else 760.dp,
+        // Entrée : spring soyeux. Sortie : tween rapide et net.
+        animationSpec = if (visible)
+            spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+        else
+            tween(durationMillis = 260, easing = FastOutLinearInEasing),
+        // Quand le panneau a fini de descendre (visible == false), on déclenche l'action.
+        finishedListener = { if (!visible) pendingExit?.invoke() },
         label = "panel"
+    )
+
+    // Un seul moteur d'animation continu partagé par toute la grille (au lieu de ~72
+    // transitions infinies indépendantes : 9 tuiles × 4 oscillations + 36 étincelles).
+    // Chaque tuile dérive son flottement de cette phase via un déphasage par index, lu
+    // dans les graphicsLayer → reste en phase de DESSIN (pas de recomposition par frame).
+    // L'ancienne version saturait le compositeur des appareils faibles et figeait le panneau.
+    val idleTransition = rememberInfiniteTransition(label = "giftIdle")
+    val idlePhase = idleTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2.0 * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "giftIdlePhase"
     )
 
     val noRipple = remember { MutableInteractionSource() }
@@ -110,7 +148,7 @@ fun GiftSheet(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = scrimAlpha))
-                .clickable(interactionSource = noRipple, indication = null, onClick = onDismiss)
+                .clickable(interactionSource = noRipple, indication = null, onClick = { beginExit(onDismiss) })
         )
 
         // Panneau bas
@@ -201,10 +239,13 @@ fun GiftSheet(
                         GiftTile(
                             gift = gift,
                             index = index,
-                            shown = shown,
+                            shown = entered,
                             selected = selected == index,
+                            idlePhase = idlePhase,
                             modifier = Modifier.weight(1f),
-                            onClick = { if (selected < 0) selected = index }
+                            // Toggle : retaper le cadeau sélectionné le désélectionne,
+                            // taper un autre change la sélection (avant : verrouillé au 1er tap).
+                            onClick = { selected = if (selected == index) -1 else index }
                         )
                     }
                     repeat(3 - rowGifts.size) { Spacer(Modifier.weight(1f)) }
@@ -225,7 +266,7 @@ fun GiftSheet(
                 )
                 balance >= gift.price -> GiftActionButton(
                     text = "Envoyer ${gift.emoji}  ·  ${"%,d".format(gift.price).replace(',', ' ')} jetons",
-                    onClick = { onSend(gift) }
+                    onClick = { beginExit { onSend(gift) } }
                 )
                 else -> {
                     val deficit = gift.price - balance
@@ -239,7 +280,7 @@ fun GiftSheet(
                     Spacer(Modifier.height(8.dp))
                     GiftActionButton(
                         text = "Recharger mon compte",
-                        onClick = { onRecharge(deficit) }
+                        onClick = { beginExit { onRecharge(deficit) } }
                     )
                 }
             }
@@ -273,6 +314,7 @@ private fun GiftTile(
     index: Int,
     shown: Boolean,
     selected: Boolean,
+    idlePhase: State<Float>,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -288,32 +330,9 @@ private fun GiftTile(
         label = "entrance$index"
     )
 
-    // Vie continue multi-couches, désynchronisée par index → grille "vivante".
-    val inf = rememberInfiniteTransition(label = "idle$index")
-    val floatY by inf.animateFloat(
-        0f, 1f,
-        infiniteRepeatable(tween(1500 + index * 130, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "floatY$index"
-    )
-    val sway by inf.animateFloat(
-        -1f, 1f,
-        infiniteRepeatable(
-            tween(2200 + index * 90, easing = FastOutSlowInEasing),
-            RepeatMode.Reverse,
-            initialStartOffset = StartOffset(index * 120)
-        ),
-        label = "sway$index"
-    )
-    val breathe by inf.animateFloat(
-        0.96f, 1.05f,
-        infiniteRepeatable(tween(1300 + index * 70, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "breathe$index"
-    )
-    val glowPulse by inf.animateFloat(
-        0.4f, 1f,
-        infiniteRepeatable(tween(1600 + index * 60, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "glow$index"
-    )
+    // Flottement / balancement / respiration dérivés de la phase partagée (déphasage par
+    // index → grille "vivante" désynchronisée), lus dans les graphicsLayer ci-dessous.
+    val idleOffset = index * 0.6f
 
     // Sélection : rebond ample + onde de choc.
     val selScale by animateFloatAsState(
@@ -371,7 +390,10 @@ private fun GiftTile(
             Box(
                 modifier = Modifier
                     .size(52.dp)
-                    .graphicsLayer { alpha = if (selected) 1f else glowPulse }
+                    .graphicsLayer {
+                        alpha = if (selected) 1f
+                        else 0.4f + 0.6f * ((sin(idlePhase.value + idleOffset) + 1f) / 2f)
+                    }
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
@@ -384,18 +406,20 @@ private fun GiftTile(
             )
 
             // Étincelles scintillantes autour du sticker.
-            Sparkle(offsetX = (-20).dp, offsetY = (-16).dp, phaseMs = index * 90)
-            Sparkle(offsetX = 19.dp, offsetY = (-18).dp, phaseMs = 220 + index * 90)
-            Sparkle(offsetX = (-18).dp, offsetY = 17.dp, phaseMs = 460 + index * 90)
-            Sparkle(offsetX = 20.dp, offsetY = 15.dp, phaseMs = 680 + index * 90)
+            Sparkle(offsetX = (-20).dp, offsetY = (-16).dp, idlePhase = idlePhase, phase = idleOffset)
+            Sparkle(offsetX = 19.dp, offsetY = (-18).dp, idlePhase = idlePhase, phase = idleOffset + 1.6f)
+            Sparkle(offsetX = (-18).dp, offsetY = 17.dp, idlePhase = idlePhase, phase = idleOffset + 3.1f)
+            Sparkle(offsetX = 20.dp, offsetY = 15.dp, idlePhase = idlePhase, phase = idleOffset + 4.7f)
 
             // Le sticker : flottement + balancement + respiration + rebond.
             Text(
                 text = gift.emoji,
                 fontSize = 33.sp,
                 modifier = Modifier.graphicsLayer {
-                    translationY = -floatY * 6f
-                    rotationZ = sway * 5f
+                    val p = idlePhase.value + idleOffset
+                    translationY = -((sin(p) + 1f) / 2f) * 6f
+                    rotationZ = sin(p * 0.8f) * 5f
+                    val breathe = 0.96f + 0.09f * ((sin(p * 1.1f) + 1f) / 2f)
                     val s = breathe * selScale
                     scaleX = s
                     scaleY = s
@@ -430,20 +454,12 @@ private fun GiftTile(
     }
 }
 
-/** Petite étincelle dorée qui scintille (apparition/disparition + léger scale), déphasée. */
+/**
+ * Petite étincelle dorée qui scintille, déphasée. Dérive du même [idlePhase] partagé que la
+ * grille (lecture en phase de dessin) — plus de transition infinie par étincelle.
+ */
 @Composable
-private fun Sparkle(offsetX: Dp, offsetY: Dp, phaseMs: Int) {
-    val inf = rememberInfiniteTransition(label = "sparkle")
-    val a by inf.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(1100, easing = FastOutSlowInEasing),
-            RepeatMode.Reverse,
-            initialStartOffset = StartOffset(phaseMs)
-        ),
-        label = "sparkleA"
-    )
+private fun Sparkle(offsetX: Dp, offsetY: Dp, idlePhase: State<Float>, phase: Float) {
     Text(
         text = "✦",
         color = UnovColors.Accent,
@@ -451,6 +467,7 @@ private fun Sparkle(offsetX: Dp, offsetY: Dp, phaseMs: Int) {
         modifier = Modifier
             .offset(x = offsetX, y = offsetY)
             .graphicsLayer {
+                val a = (sin(idlePhase.value * 1.6f + phase) + 1f) / 2f
                 alpha = a
                 val s = 0.5f + a * 0.7f
                 scaleX = s

@@ -90,7 +90,9 @@ fun ReactionAction(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = modifier.pointerInput(Unit) {
+        // Keyé sur `current` : sans ça, le bloc pointerInput ne s'exécute qu'une fois
+        // et la lambda onTap capture un `current` figé (toujours null) → unlike impossible.
+        modifier = modifier.pointerInput(current) {
             detectTapGestures(
                 onTap = { onSelect(if (current == null) Reaction.Like else null) },
                 onLongPress = { pickerOpen = true }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.unovapp.android.data.auth.AuthRepository
 import com.unovapp.android.data.network.ApiError
 import com.unovapp.android.data.network.NetworkResult
+import com.unovapp.android.data.user.FollowStore
 import com.unovapp.android.data.user.UserProfileDto
 import com.unovapp.android.data.user.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,11 +31,18 @@ data class ProfileNetworkState(
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val followStore: FollowStore
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileNetworkState())
     val state: StateFlow<ProfileNetworkState> = _state.asStateFlow()
+
+    /**
+     * Variation du nombre d'abonnements depuis le dernier `/users/me` — permet d'incrémenter
+     * « Suivis » instantanément quand on suit quelqu'un (recherche, autre profil…) sans recharger.
+     */
+    val followingDelta: StateFlow<Int> = followStore.followingDelta
 
     init { load() }
 
@@ -42,8 +50,11 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             when (val r = userRepository.fetchMe()) {
-                is NetworkResult.Success ->
+                is NetworkResult.Success -> {
+                    // Le compteur backend intègre déjà les follows de la session → on repart de 0.
+                    followStore.resetDelta()
                     _state.update { it.copy(isLoading = false, profile = r.data, error = null) }
+                }
                 is NetworkResult.Failure -> {
                     if (r.error is ApiError.Unauthorized) {
                         // Token absent/expiré et refresh impossible → on repart proprement au login.

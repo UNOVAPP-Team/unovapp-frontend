@@ -186,10 +186,12 @@ fun ProfileScreen(
     onOpenBattle: () -> Unit = {},
     onOpenWallet: () -> Unit = {},
     onLoggedOut: () -> Unit = {},
+    onOpenConnections: (userId: String, username: String, showFollowers: Boolean) -> Unit = { _, _, _ -> },
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     UnovAppTheme {
         val net by viewModel.state.collectAsStateWithLifecycle()
+        val followingDelta by viewModel.followingDelta.collectAsStateWithLifecycle()
 
         // Session expirée/invalide (401) → on renvoie vers la connexion.
         androidx.compose.runtime.LaunchedEffect(net.sessionExpired) {
@@ -199,13 +201,15 @@ fun ProfileScreen(
         // Données réelles (/users/me) fusionnées dans l'état d'affichage.
         // Les sections riches (battles, top fans, grille…) restent mockées tant que
         // le backend ne les expose pas.
-        val state = mergeRealProfile(baseState, net.profile)
+        val state = mergeRealProfile(baseState, net.profile, followingDelta)
+        val myId = net.profile?.id
 
         var subscribed by remember { mutableStateOf(false) }
         var tab by remember { mutableStateOf(ProfileTab.Videos) }
         var filter by remember { mutableStateOf("Récents") }
         var langPickerOpen by remember { mutableStateOf(false) }
         var editOpen by remember { mutableStateOf(false) }
+        var settingsOpen by remember { mutableStateOf(false) }
         val scrollState = rememberScrollState()
 
         when {
@@ -224,14 +228,21 @@ fun ProfileScreen(
                 .verticalScroll(scrollState)
                 .padding(contentPadding)
         ) {
-            CoverHeader(state = state, scrollPx = scrollState.value, onOpenLangPicker = { langPickerOpen = true })
+            CoverHeader(
+                state = state,
+                scrollPx = scrollState.value,
+                onOpenLangPicker = { langPickerOpen = true },
+                onOpenSettings = { settingsOpen = true }
+            )
             IdentityBlock(
                 state = state,
                 subscribed = subscribed,
                 onToggleSubscribe = { subscribed = !subscribed },
                 onOpenBattle = onOpenBattle,
                 onOpenWallet = onOpenWallet,
-                onEditProfile = { editOpen = true }
+                onEditProfile = { editOpen = true },
+                onOpenFollowers = { myId?.let { onOpenConnections(it, state.username, true) } },
+                onOpenFollowing = { myId?.let { onOpenConnections(it, state.username, false) } }
             )
 
             // Sections content-aware : on n'affiche que ce qui a réellement des données
@@ -325,6 +336,19 @@ fun ProfileScreen(
                 onDismiss = { viewModel.clearSaveError(); editOpen = false }
             )
         }
+
+        // « Paramètres et confidentialité » — overlay plein écran ouvert depuis le ⋮ du cover.
+        // On ferme settings avant d'ouvrir une sous-destination (édition/portefeuille) pour
+        // éviter l'empilement d'overlays et garder un retour propre.
+        if (settingsOpen) {
+            SettingsScreen(
+                tier = state.tier,
+                onClose = { settingsOpen = false },
+                onEditProfile = { settingsOpen = false; editOpen = true },
+                onOpenWallet = { settingsOpen = false; onOpenWallet() },
+                onLogout = { viewModel.logout(onLoggedOut) }
+            )
+        }
     }
 }
 
@@ -365,7 +389,8 @@ private fun ProfileLoadingState() {
 /** Fusionne le profil réel dans l'état mock (ne touche qu'aux champs d'identité connus). */
 private fun mergeRealProfile(
     base: ProfileUiState,
-    p: com.unovapp.android.data.user.UserProfileDto?
+    p: com.unovapp.android.data.user.UserProfileDto?,
+    followingDelta: Int = 0
 ): ProfileUiState {
     if (p == null) return base
     return base.copy(
@@ -377,7 +402,8 @@ private fun mergeRealProfile(
         bio = p.bio?.takeIf { it.isNotBlank() } ?: base.bio,
         avatarUrl = p.avatarUrl,
         followersFmt = formatCompact(p.followersCount),
-        videosFmt = formatCompact(p.followingCount), // pas de "vidéos" backend → on affiche les abonnements réels
+        // pas de "vidéos" backend → on affiche les abonnements réels, ajustés du delta optimiste.
+        videosFmt = formatCompact((p.followingCount + followingDelta).coerceAtLeast(0)),
         revenueFcfaFmt = formatThousands(p.walletBalance)
     )
 }
@@ -421,7 +447,12 @@ private fun LogoutButton(onClick: () -> Unit) {
 /* ---------- Cover ---------- */
 
 @Composable
-private fun CoverHeader(state: ProfileUiState, scrollPx: Int = 0, onOpenLangPicker: () -> Unit = {}) {
+private fun CoverHeader(
+    state: ProfileUiState,
+    scrollPx: Int = 0,
+    onOpenLangPicker: () -> Unit = {},
+    onOpenSettings: () -> Unit = {}
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -531,7 +562,11 @@ private fun CoverHeader(state: ProfileUiState, scrollPx: Int = 0, onOpenLangPick
             ) {
                 LanguageChip(onClick = onOpenLangPicker)
                 CoverIconButton(Icons.Outlined.QrCode, "QR")
-                CoverIconButton(Icons.Filled.MoreVert, "Plus")
+                CoverIconButton(
+                    Icons.Filled.MoreVert,
+                    "Paramètres et confidentialité",
+                    onClick = onOpenSettings
+                )
             }
         }
 
@@ -540,14 +575,14 @@ private fun CoverHeader(state: ProfileUiState, scrollPx: Int = 0, onOpenLangPick
 }
 
 @Composable
-private fun CoverIconButton(icon: ImageVector, contentDescription: String) {
+private fun CoverIconButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .size(34.dp)
             .clip(CircleShape)
             .background(Color.Black.copy(alpha = 0.42f))
             .border(1.dp, UnovColors.Accent.copy(alpha = 0.18f), CircleShape)
-            .unovTap(onClick = {}, pressedScale = 0.88f),
+            .unovTap(onClick = onClick, pressedScale = 0.88f),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -568,7 +603,9 @@ private fun IdentityBlock(
     onToggleSubscribe: () -> Unit,
     onOpenBattle: () -> Unit,
     onOpenWallet: () -> Unit,
-    onEditProfile: () -> Unit
+    onEditProfile: () -> Unit,
+    onOpenFollowers: () -> Unit = {},
+    onOpenFollowing: () -> Unit = {}
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         // Avatar (overlaps cover) + stats
@@ -580,7 +617,7 @@ private fun IdentityBlock(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ProfileAvatar(name = state.displayName, avatarUrl = state.avatarUrl)
-            StatsTrio(state = state)
+            StatsTrio(state = state, onOpenFollowers = onOpenFollowers, onOpenFollowing = onOpenFollowing)
         }
 
         // Name + verified + tier
@@ -789,7 +826,11 @@ private fun ProfileAvatar(name: String, avatarUrl: String?) {
 }
 
 @Composable
-private fun StatsTrio(state: ProfileUiState) {
+private fun StatsTrio(
+    state: ProfileUiState,
+    onOpenFollowers: () -> Unit = {},
+    onOpenFollowing: () -> Unit = {}
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -801,6 +842,7 @@ private fun StatsTrio(state: ProfileUiState) {
             label = "Abonnés",
             trend = null,
             sparkValues = null,
+            onClick = onOpenFollowers,
             modifier = Modifier.weight(1f)
         )
         StatDivider()
@@ -817,6 +859,7 @@ private fun StatsTrio(state: ProfileUiState) {
             label = "Suivis",
             trend = null,
             sparkValues = null,
+            onClick = onOpenFollowing,
             modifier = Modifier.weight(1f)
         )
     }
@@ -838,9 +881,14 @@ private fun StatTile(
     label: String,
     trend: String?,
     sparkValues: List<Float>?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
-    Column(modifier = modifier.padding(horizontal = 10.dp, vertical = 4.dp)) {
+    val interaction = remember { MutableInteractionSource() }
+    val clickMod = if (onClick != null) {
+        Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+    } else Modifier
+    Column(modifier = modifier.then(clickMod).padding(horizontal = 10.dp, vertical = 4.dp)) {
         Text(
             text = value,
             color = UnovColors.Text,

@@ -93,6 +93,7 @@ fun FeedItem(
     video: FeedVideoUi,
     isCurrentPage: Boolean,
     muted: Boolean,
+    paused: Boolean = false,
     onCommentClick: () -> Unit = {},
     onGiftClick: () -> Unit = {},
     onChallengeClick: () -> Unit = {}
@@ -145,7 +146,7 @@ fun FeedItem(
     ) {
         VideoPlayer(
             url = video.hlsUrl,
-            isPlaying = isCurrentPage && !userPaused,
+            isPlaying = isCurrentPage && !userPaused && !paused,
             muted = muted,
             onProgress = { progress = it },
             modifier = Modifier.fillMaxSize()

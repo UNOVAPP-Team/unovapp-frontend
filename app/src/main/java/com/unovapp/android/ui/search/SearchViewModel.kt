@@ -3,14 +3,18 @@ package com.unovapp.android.ui.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.unovapp.android.data.network.NetworkResult
+import com.unovapp.android.data.user.FollowManager
+import com.unovapp.android.data.user.FollowStore
 import com.unovapp.android.data.user.UserRepository
 import com.unovapp.android.data.user.UserSummaryDto
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,11 +29,18 @@ data class SearchUiState(
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val followManager: FollowManager,
+    followStore: FollowStore
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SearchUiState())
-    val state: StateFlow<SearchUiState> = _state.asStateFlow()
+
+    // L'état des boutons « Suivre » vient du store partagé → cohérent avec profil & listes,
+    // et reflété instantanément dès qu'on suit quelqu'un n'importe où dans l'app.
+    val state: StateFlow<SearchUiState> =
+        combine(_state, followStore.following) { s, following -> s.copy(followingIds = following) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, SearchUiState())
 
     private var searchJob: Job? = null
 
@@ -52,26 +63,6 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    /** Suivre / ne plus suivre (optimiste + rollback si l'API échoue). */
-    fun toggleFollow(userId: String) {
-        val wasFollowing = _state.value.followingIds.contains(userId)
-        _state.update {
-            it.copy(
-                followingIds = if (wasFollowing) it.followingIds - userId
-                else it.followingIds + userId
-            )
-        }
-        viewModelScope.launch {
-            val r = if (wasFollowing) userRepository.unfollow(userId)
-            else userRepository.follow(userId)
-            if (r is NetworkResult.Failure) {
-                _state.update {
-                    it.copy(
-                        followingIds = if (wasFollowing) it.followingIds + userId
-                        else it.followingIds - userId
-                    )
-                }
-            }
-        }
-    }
+    /** Suivre / ne plus suivre — délégué au store partagé (optimiste + rollback centralisés). */
+    fun toggleFollow(userId: String) = followManager.toggle(userId)
 }

@@ -103,6 +103,10 @@ fun FeedScreen(
                 video = videos[page],
                 isCurrentPage = page == pagerState.currentPage,
                 muted = muted,
+                // Libère le pipeline vidéo (décodage HLS + upscale) tant qu'une feuille
+                // recouvre le feed : inutile de décoder sous un scrim, et ça évite que
+                // la vidéo concurrence les animations du panneau sur les appareils faibles.
+                paused = giftSheetOpen || commentsForVideoId != null,
                 onCommentClick = { commentsForVideoId = videos[page].id },
                 onGiftClick = { giftSheetOpen = true },
                 onChallengeClick = { /* TODO: ouvrir création Battle */ }

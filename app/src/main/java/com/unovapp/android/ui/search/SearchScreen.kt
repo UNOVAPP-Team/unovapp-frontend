@@ -96,6 +96,7 @@ private val MOCK_VIDEOS = listOf(
 @Composable
 fun SearchScreen(
     contentPadding: PaddingValues = PaddingValues(0.dp),
+    onOpenUser: (UserSummaryDto) -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     UnovAppTheme {
@@ -124,6 +125,7 @@ fun SearchScreen(
                 UserSearchResults(
                     state = s,
                     onToggleFollow = viewModel::toggleFollow,
+                    onOpenUser = onOpenUser,
                     onRetry = { viewModel.onQueryChange(s.query) }
                 )
             } else {
@@ -147,6 +149,7 @@ fun SearchScreen(
 private fun UserSearchResults(
     state: SearchUiState,
     onToggleFollow: (String) -> Unit,
+    onOpenUser: (UserSummaryDto) -> Unit,
     onRetry: () -> Unit
 ) {
     when {
@@ -175,7 +178,8 @@ private fun UserSearchResults(
                 UserResultRow(
                     user = user,
                     following = state.followingIds.contains(user.id),
-                    onFollow = { onToggleFollow(user.id) }
+                    onFollow = { onToggleFollow(user.id) },
+                    onOpen = { onOpenUser(user) }
                 )
             }
         }
@@ -183,12 +187,13 @@ private fun UserSearchResults(
 }
 
 @Composable
-private fun UserResultRow(user: UserSummaryDto, following: Boolean, onFollow: () -> Unit) {
+private fun UserResultRow(user: UserSummaryDto, following: Boolean, onFollow: () -> Unit, onOpen: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(UnovColors.Surface)
+            .unovTap(onClick = onOpen, pressedScale = 0.98f)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
