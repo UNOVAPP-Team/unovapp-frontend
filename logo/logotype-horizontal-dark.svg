@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 100" width="420" height="100">
+<g transform="translate(0,0)">
+  <g transform="translate(4,20) scale(0.72)"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M26 52 L26 33 C26 28.6 28.6 26 33 26 L52 26" stroke="#F5F1EA" stroke-width="14"></path><path d="M74 48 L74 67 C74 71.4 71.4 74 67 74 L48 74" stroke="#C65A2E" stroke-width="14"></path></g></g>
+  <text x="86" y="70" font-family="&#39;Space Grotesk&#39;,sans-serif" font-weight="600" font-size="52" letter-spacing="-1.4" fill="#F5F1EA">unovapp</text>
+</g></svg>
