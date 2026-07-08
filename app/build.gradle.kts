@@ -23,24 +23,20 @@ android {
         applicationId = "com.unovapp.android"
         minSdk = 24
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 10
+        versionName = "1.9"
 
-        buildConfigField(
-            "String",
-            "AUTH_BASE_URL",
-            "\"https://unovapp-auth.onrender.com/api/v1/\""
-        )
-        buildConfigField(
-            "String",
-            "USER_BASE_URL",
-            "\"https://unovapp-user.onrender.com/api/v1/\""
-        )
-        buildConfigField(
-            "String",
-            "SOCIAL_BASE_URL",
-            "\"https://unovapp-social.onrender.com/api/v1/\""
-        )
+        // Passerelle unique (VPS Hostinger, Frankfurt). Un reverse proxy Nginx route en
+        // interne vers auth/user/social/video selon le chemin. Depuis le 2026-06-26, plus
+        // de sous-domaines Render : les 4 constantes pointent toutes sur la même base URL,
+        // ce qui garde NetworkModule (4 Retrofit) inchangé tout en unifiant l'hôte.
+        // ⚠️ HTTP en clair tant qu'il n'y a pas de domaine + SSL → cleartext autorisé pour
+        // cette IP dans res/xml/network_security_config.xml.
+        val gatewayBaseUrl = "\"http://152.239.118.90/api/v1/\""
+        buildConfigField("String", "AUTH_BASE_URL", gatewayBaseUrl)
+        buildConfigField("String", "USER_BASE_URL", gatewayBaseUrl)
+        buildConfigField("String", "SOCIAL_BASE_URL", gatewayBaseUrl)
+        buildConfigField("String", "VIDEO_BASE_URL", gatewayBaseUrl)
         // TODO: remplacer par le vrai Web Client ID Google OAuth quand le backend exposera /auth/google.
         buildConfigField(
             "String",
@@ -147,6 +143,9 @@ dependencies {
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // Chiffrement des tokens (EncryptedSharedPreferences + Android Keystore)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Lifecycle + ViewModel + Hilt nav
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.4")
@@ -160,11 +159,26 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // WorkManager — sondage périodique des notifications d'activité (like/commentaire/abonné)
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     // Coil — chargement d'images distantes (avatars, miniatures)
     implementation("io.coil-kt:coil-compose:2.6.0")
 
     // Media3 ExoPlayer + HLS (Mois 2 — pipeline vidéo)
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
-    implementation("androidx.media3:media3-ui:1.4.1")
+    // 1.8.0 : DefaultPreloadManager stable (préchargement centralisé façon TikTok, priorités
+    // par distance à la page courante) — remplace le préfetch artisanal multi-lecteurs.
+    implementation("androidx.media3:media3-exoplayer:1.8.0")
+    implementation("androidx.media3:media3-exoplayer-hls:1.8.0")
+    implementation("androidx.media3:media3-ui:1.8.0")
+    // Transformer — export/téléchargement d'une vidéo (HLS → mp4) vers la galerie
+    implementation("androidx.media3:media3-transformer:1.8.0")
+    implementation("androidx.media3:media3-common:1.8.0")
+
+    // CameraX — caméra in-app (enregistrement vidéo façon TikTok)
+    implementation("androidx.camera:camera-core:1.4.1")
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
+    implementation("androidx.camera:camera-video:1.4.1")
 }

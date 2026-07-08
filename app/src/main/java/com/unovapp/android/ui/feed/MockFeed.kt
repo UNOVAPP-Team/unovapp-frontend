@@ -1,12 +1,18 @@
 package com.unovapp.android.ui.feed
 
+/** Un type de cadeau reçu par une vidéo — utilisé dans le GiftBreakdownSheet. */
+data class GiftReceived(val emoji: String, val name: String, val count: Int)
+
 /**
  * Modèle UI d'un item du feed. Mirror temporaire de la future réponse `GET /api/v1/feed`.
  * Quand le backend sera up (Mois 2 Jour 4), on remplacera la source par un FeedRepository.
  */
 data class FeedVideoUi(
     val id: String,
+    /** URL de LECTURE — peut être une master playlist synthétisée en `data:` URI (ABR). */
     val hlsUrl: String,
+    /** URL concrète de la meilleure rendition — téléchargement, partage, copie de lien. */
+    val downloadUrl: String = "",
     val creatorUsername: String,
     val creatorAvatarIdx: Int,
     val description: String,
@@ -14,8 +20,41 @@ data class FeedVideoUi(
     val commentsFmt: String,
     val sharesFmt: String,
     val isFollowing: Boolean,
-    val isLiked: Boolean = false
-)
+    val isLiked: Boolean = false,
+    val giftsFmt: String = "0",
+    val giftBreakdown: List<GiftReceived> = emptyList(),
+    /** UUID du créateur — utilisé pour la navigation vers son profil. Vide sur les mocks. */
+    val creatorId: String = "",
+    /** Nombre de likes brut (source du compteur optimiste). `likesFmt` en est l'affichage formaté. */
+    val likesCount: Int = 0,
+    /** Photo de profil réelle du créateur (résolue via /users/:id). Null → avatar à initiales. */
+    val avatarUrl: String? = null,
+    /** Nombre de cadeaux reçus (compteur local optimiste — pas d'endpoint cadeau côté backend). */
+    val giftsCount: Int = 0,
+    /** Miniature de la vidéo — sert de fond flouté plein écran (façon TikTok). */
+    val thumbnailUrl: String? = null,
+    /** Date de publication ISO-8601 (created_at) — source du temps relatif « il y a … ». */
+    val createdAt: String = "",
+    /** Vidéo sauvegardée par l'utilisateur (Sprint 1). */
+    val isSaved: Boolean = false,
+    /** Nombre de partages réel (Sprint 1). */
+    val sharesCount: Int = 0,
+    /** Hashtags dérivés de la description (Sprint 1/3). */
+    val hashtags: List<String> = emptyList(),
+    /** Visibilité ("public"/"private") — pour l'écran d'édition de sa propre vidéo. */
+    val visibility: String? = null,
+    /** Nombre de commentaires brut (source du compteur optimiste après ajout). */
+    val commentsCount: Int = 0,
+    /** Nombre de vues brut + affichage formaté (compteur façon TikTok). */
+    val viewsCount: Int = 0,
+    val viewsFmt: String = "0",
+    /** Durée annoncée par l'API (s) — repli pour le chip temps du scrub si le player n'a pas
+     *  encore résolu la durée exacte. */
+    val durationSec: Int = 0
+) {
+    /** URL à partager/télécharger : la rendition concrète, jamais la data-URI de lecture. */
+    val shareableUrl: String get() = downloadUrl.ifBlank { hlsUrl }
+}
 
 /**
  * Liste de streams HLS publics + métadonnées fictives — utilisée tant que le `/feed` API
@@ -39,8 +78,17 @@ val MockFeedVideos: List<FeedVideoUi> = listOf(
         likesFmt = "12,4 K",
         commentsFmt = "847",
         sharesFmt = "231",
-        isFollowing = true,
-        isLiked = false
+        isFollowing = false,
+        isLiked = false,
+        giftsFmt = "2,3 K",
+        giftBreakdown = listOf(
+            GiftReceived("🚀", "Fusée", 12),
+            GiftReceived("👑", "Couronne", 45),
+            GiftReceived("💎", "Diamant", 89),
+            GiftReceived("🦁", "Lion", 34),
+            GiftReceived("🌹", "Rose", 127),
+            GiftReceived("🔥", "Flamme", 312),
+        )
     ),
     FeedVideoUi(
         id = "v2",
@@ -52,7 +100,13 @@ val MockFeedVideos: List<FeedVideoUi> = listOf(
         commentsFmt = "2,1 K",
         sharesFmt = "892",
         isFollowing = false,
-        isLiked = true
+        isLiked = true,
+        giftsFmt = "891",
+        giftBreakdown = listOf(
+            GiftReceived("🎁", "Surprise", 23),
+            GiftReceived("⭐", "Étoile", 67),
+            GiftReceived("❤️", "Cœur", 201),
+        )
     ),
     FeedVideoUi(
         id = "v3",
@@ -63,7 +117,12 @@ val MockFeedVideos: List<FeedVideoUi> = listOf(
         likesFmt = "8,9 K",
         commentsFmt = "412",
         sharesFmt = "156",
-        isFollowing = false
+        isFollowing = false,
+        giftsFmt = "234",
+        giftBreakdown = listOf(
+            GiftReceived("🌹", "Rose", 98),
+            GiftReceived("❤️", "Cœur", 136),
+        )
     ),
     FeedVideoUi(
         id = "v4",
@@ -74,7 +133,11 @@ val MockFeedVideos: List<FeedVideoUi> = listOf(
         likesFmt = "5,6 K",
         commentsFmt = "289",
         sharesFmt = "412",
-        isFollowing = true
+        isFollowing = true,
+        giftsFmt = "45",
+        giftBreakdown = listOf(
+            GiftReceived("🌹", "Rose", 45),
+        )
     ),
     FeedVideoUi(
         id = "v5",
@@ -85,6 +148,16 @@ val MockFeedVideos: List<FeedVideoUi> = listOf(
         likesFmt = "47,8 K",
         commentsFmt = "3,4 K",
         sharesFmt = "1,2 K",
-        isFollowing = false
+        isFollowing = false,
+        giftsFmt = "5,1 K",
+        giftBreakdown = listOf(
+            GiftReceived("🚀", "Fusée", 28),
+            GiftReceived("👑", "Couronne", 112),
+            GiftReceived("💎", "Diamant", 234),
+            GiftReceived("🦁", "Lion", 87),
+            GiftReceived("🎁", "Surprise", 198),
+            GiftReceived("🔥", "Flamme", 441),
+            GiftReceived("🌹", "Rose", 617),
+        )
     )
 )

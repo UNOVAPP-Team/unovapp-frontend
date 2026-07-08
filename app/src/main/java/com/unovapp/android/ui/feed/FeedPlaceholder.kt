@@ -24,7 +24,7 @@ fun FeedPlaceholder(contentPadding: PaddingValues = PaddingValues(0.dp)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF050505))
+                .background(Color(0xFF0D0D0D))
                 .padding(contentPadding),
             contentAlignment = Alignment.Center
         ) {

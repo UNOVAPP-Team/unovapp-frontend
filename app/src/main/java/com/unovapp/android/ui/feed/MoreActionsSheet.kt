@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Link
@@ -58,11 +59,15 @@ import android.widget.Toast
 @Composable
 fun MoreActionsSheet(
     video: FeedVideoUi,
+    isSaved: Boolean = false,
+    onToggleSave: () -> Unit = {},
+    onReport: (reason: String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
 
+    var reportMode by remember { mutableStateOf(false) }
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     val scrim by animateFloatAsState(if (shown) 0.6f else 0f, tween(240), label = "moreScrim")
@@ -102,26 +107,51 @@ fun MoreActionsSheet(
             )
             Spacer(Modifier.height(14.dp))
 
-            MoreRow(Icons.Outlined.Link, "Copier le lien") {
-                clipboard.setText(AnnotatedString(video.hlsUrl))
-                toast("Lien copié")
-                onDismiss()
-            }
-            MoreRow(Icons.AutoMirrored.Outlined.Send, "Partager") {
-                onDismiss()
-                shareVideo(context, video)
-            }
-            MoreRow(Icons.Outlined.BookmarkBorder, "Enregistrer") {
-                toast("Vidéo enregistrée")
-                onDismiss()
-            }
-            MoreRow(Icons.Outlined.VisibilityOff, "Pas intéressé") {
-                toast("On t'en montrera moins")
-                onDismiss()
-            }
-            MoreRow(Icons.Outlined.Flag, "Signaler", danger = true) {
-                toast("Signalement envoyé")
-                onDismiss()
+            if (reportMode) {
+                // Sous-menu : motif de signalement (envoyé au backend).
+                Text(
+                    "Pourquoi signales-tu cette vidéo ?",
+                    color = UnovColors.TextDim, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
+                )
+                listOf(
+                    "spam" to "Spam ou trompeur",
+                    "violence" to "Violence",
+                    "nudity" to "Nudité / contenu sexuel",
+                    "harassment" to "Harcèlement",
+                    "other" to "Autre"
+                ).forEach { (reason, label) ->
+                    MoreRow(Icons.Outlined.Flag, label, danger = true) {
+                        onReport(reason)
+                        toast("Signalement envoyé")
+                        onDismiss()
+                    }
+                }
+            } else {
+                MoreRow(Icons.Outlined.Link, "Copier le lien") {
+                    clipboard.setText(AnnotatedString(video.shareableUrl))
+                    toast("Lien copié")
+                    onDismiss()
+                }
+                MoreRow(Icons.AutoMirrored.Outlined.Send, "Partager") {
+                    onDismiss()
+                    shareVideo(context, video)
+                }
+                MoreRow(
+                    if (isSaved) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                    if (isSaved) "Retirer des favoris" else "Enregistrer"
+                ) {
+                    onToggleSave()
+                    toast(if (isSaved) "Retiré des favoris" else "Vidéo enregistrée")
+                    onDismiss()
+                }
+                MoreRow(Icons.Outlined.VisibilityOff, "Pas intéressé") {
+                    toast("On t'en montrera moins")
+                    onDismiss()
+                }
+                MoreRow(Icons.Outlined.Flag, "Signaler", danger = true) {
+                    reportMode = true
+                }
             }
         }
     }

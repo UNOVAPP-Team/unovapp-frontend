@@ -15,7 +15,7 @@ fun shareVideo(context: Context, video: FeedVideoUi) {
         append("Regarde cette vidéo de @${video.creatorUsername} sur UNOVAPP 🎬\n\n")
         append(video.description)
         append("\n\n")
-        append(video.hlsUrl)
+        append(video.shareableUrl)
     }
 
     val sendIntent = Intent(Intent.ACTION_SEND).apply {
