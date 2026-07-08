@@ -26,6 +26,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.SentimentVerySatisfied
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.VolunteerActivism
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,14 +60,20 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import com.unovapp.android.ui.theme.UnovColors
 
-/** Jeu de réactions façon LinkedIn. */
-enum class Reaction(val emoji: String, val label: String, val color: Color) {
-    Like("👍", "J'aime", Color(0xFF4A90E2)),
-    Love("❤️", "J'adore", Color(0xFFE0245E)),
-    Celebrate("👏", "Bravo", UnovColors.Accent),
-    Support("🙌", "Soutien", Color(0xFF6FCF97)),
-    Insightful("💡", "Inspirant", Color(0xFFF2C94C)),
-    Funny("😂", "Haha", Color(0xFFF2994A))
+/**
+ * Réactions UNOVAPP — icônes vectorielles maison teintées dans l'identité orange.
+ * Like / Cœur / Fou rire / Feu / Éclair (signature UNOVAPP) / Bravo / Soutien.
+ * [emoji] non-null → rendu en émoji système (couleurs natives) au lieu de l'icône teintée :
+ * utilisé pour le fou rire 😂, dont aucune icône Material ne rend l'intention.
+ */
+enum class Reaction(val icon: ImageVector, val label: String, val color: Color, val emoji: String? = null) {
+    Like(Icons.Filled.ThumbUp, "J'aime", UnovColors.Accent),
+    Love(Icons.Filled.Favorite, "J'adore", Color(0xFFFF4D6A)),
+    Haha(Icons.Filled.SentimentVerySatisfied, "Fou rire", Color(0xFFFFC24D), emoji = "😂"),
+    Fire(Icons.Filled.LocalFireDepartment, "En feu", UnovColors.Accent),
+    Bolt(Icons.Filled.Bolt, "Énergie", UnovColors.AccentLight),
+    Celebrate(Icons.Filled.Celebration, "Bravo", UnovColors.AccentLight),
+    Support(Icons.Filled.VolunteerActivism, "Soutien", UnovColors.Success)
 }
 
 private val BackEasing = Easing { t -> val s = 1.9f; val u = t - 1f; u * u * ((s + 1f) * u + s) + 1f }
@@ -94,24 +108,33 @@ fun ReactionAction(
         // et la lambda onTap capture un `current` figé (toujours null) → unlike impossible.
         modifier = modifier.pointerInput(current) {
             detectTapGestures(
-                onTap = { onSelect(if (current == null) Reaction.Like else null) },
+                onTap = { onSelect(if (current == null) Reaction.Love else null) },
                 onLongPress = { pickerOpen = true }
             )
         }
     ) {
-        Box(modifier = Modifier.size(30.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
             if (current == null) {
                 Icon(
                     imageVector = Icons.Outlined.FavoriteBorder,
                     contentDescription = "Réagir",
                     tint = Color.White,
-                    modifier = Modifier.size(30.dp)
+                    modifier = Modifier.size(36.dp)
                 )
-            } else {
+            } else if (current.emoji != null) {
                 Text(
                     text = current.emoji,
-                    fontSize = 27.sp,
+                    fontSize = 26.sp,
                     modifier = Modifier.graphicsLayer { scaleX = pop; scaleY = pop }
+                )
+            } else {
+                Icon(
+                    imageVector = current.icon,
+                    contentDescription = current.label,
+                    tint = current.color,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .graphicsLayer { scaleX = pop; scaleY = pop }
                 )
             }
         }
@@ -119,7 +142,7 @@ fun ReactionAction(
         Text(
             text = countFmt,
             color = Color.White,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
     }
@@ -229,6 +252,15 @@ private fun ReactionBubble(reaction: Reaction, index: Int, shown: Boolean, onCli
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = reaction.emoji, fontSize = 26.sp)
+        if (reaction.emoji != null) {
+            Text(text = reaction.emoji, fontSize = 20.sp)
+        } else {
+            Icon(
+                imageVector = reaction.icon,
+                contentDescription = reaction.label,
+                tint = reaction.color,
+                modifier = Modifier.size(26.dp)
+            )
+        }
     }
 }

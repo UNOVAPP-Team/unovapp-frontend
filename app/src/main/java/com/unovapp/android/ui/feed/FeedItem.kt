@@ -17,7 +17,11 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +40,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Place
@@ -47,6 +53,7 @@ import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Redeem
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -75,12 +82,18 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Une page du feed (pleine hauteur). Joue la vidéo si [isCurrentPage] et superpose le HUD.
@@ -93,23 +106,55 @@ fun FeedItem(
     video: FeedVideoUi,
     isCurrentPage: Boolean,
     muted: Boolean,
+    bottomPadding: Dp = 0.dp,
     paused: Boolean = false,
     onCommentClick: () -> Unit = {},
     onGiftClick: () -> Unit = {},
-    onChallengeClick: () -> Unit = {}
+    onGiftCountClick: () -> Unit = {},
+    onChallengeClick: () -> Unit = {},
+    /** Appelé quand l'utilisateur like ou délike la vidéo (toggle). Fire-and-forget. */
+    onLike: (videoId: String) -> Unit = {},
+    /** État de suivi du créateur, issu du store partagé (persiste au scroll). */
+    isFollowing: Boolean = false,
+    /** Suivre le créateur (UUID). Géré par le FollowManager partagé (backend + rollback). */
+    onFollow: (creatorId: String) -> Unit = {},
+    /** true si la vidéo est celle de l'utilisateur connecté → on masque « Suivre ». */
+    isSelf: Boolean = false,
+    /** Ouvre le profil/stats du créateur (tap sur l'avatar ou le pseudo). */
+    onOpenProfile: (creatorId: String) -> Unit = {},
+    /** Lecteur UNIQUE partagé — non-null seulement pour la page courante. */
+    player: androidx.media3.exoplayer.ExoPlayer? = null,
+    /** Progression de lecture 0..1 (fournie par FeedScreen pour la page courante). */
+    playbackProgress: Float = 0f,
+    /** Durée totale de la vidéo (ms) — pour le chip temps pendant le scrub de la barre. */
+    durationMs: Long = 0L,
+    /** Seek utilisateur sur la barre de progression (fraction 0..1) — page courante. */
+    onSeek: (Float) -> Unit = {},
+    /** Affiche l'indicateur de pause central (l'utilisateur a mis en pause manuellement). */
+    showPauseIndicator: Boolean = false,
+    /** Tap sur la vidéo → bascule lecture/pause (géré par FeedScreen). */
+    onTogglePlay: () -> Unit = {},
+    /** Sauvegarder / retirer des favoris (toggle, backend). */
+    onSave: () -> Unit = {},
+    /** Tracking de partage backend (compteur réel), en plus du partage système. */
+    onShare: () -> Unit = {},
+    /** Signaler la vidéo (reason ∈ spam|violence|nudity|harassment|other). */
+    onReport: (reason: String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    var reaction by remember(video.id) { mutableStateOf<Reaction?>(if (video.isLiked) Reaction.Like else null) }
-    var followed by remember(video.id) { mutableStateOf(video.isFollowing) }
-    var captionExpanded by remember(video.id) { mutableStateOf(false) }
-    var progress by remember(video.id) { mutableFloatStateOf(0f) }
-    var moreOpen by remember(video.id) { mutableStateOf(false) }
-
-    // Pause manuelle (tap sur la vidéo, façon TikTok). Réinitialisée quand on quitte la page.
-    var userPaused by remember(video.id) { mutableStateOf(false) }
-    LaunchedEffect(isCurrentPage) {
-        if (!isCurrentPage) userPaused = false
+    // Réaction choisie (type : cœur, feu, éclair…), persistée côté client via ReactionMemory
+    // → l'icône reflète VRAIMENT le sticker choisi et survit au scroll/recomposition.
+    val reaction: Reaction? = ReactionMemory.map[video.id]
+    LaunchedEffect(video.id, video.isLiked) {
+        // Cœur par défaut pour une vidéo déjà likée (sans écraser un sticker explicite persisté).
+        if (video.isLiked) ReactionMemory.setDefault(video.id, Reaction.Love)
     }
+    // Reflète le store partagé : un suivi reste affiché tant que la session vit.
+    val followed = isFollowing || video.isFollowing
+    var captionExpanded by remember(video.id) { mutableStateOf(false) }
+    val progress = playbackProgress
+    var moreOpen by remember(video.id) { mutableStateOf(false) }
+    var shareOpen by remember(video.id) { mutableStateOf(false) }
 
     // Révélation premium du HUD (rail + infos) quand la vidéo devient active.
     val hud by animateFloatAsState(
@@ -136,25 +181,28 @@ fun FeedItem(
             .background(Color.Black)
             .pointerInput(video.id) {
                 detectTapGestures(
-                    onTap = { userPaused = !userPaused },
+                    onTap = { onTogglePlay() },
                     onDoubleTap = {
-                        if (reaction == null) reaction = Reaction.Love
+                        // Double-tap = j'aime (façon TikTok) : cœur + like si pas déjà réagi.
+                        if (ReactionMemory.map[video.id] == null) {
+                            ReactionMemory.set(video.id, Reaction.Love)
+                            onLike(video.id)
+                        }
                         heartPopKey++
                     }
                 )
             }
     ) {
-        VideoPlayer(
-            url = video.hlsUrl,
-            isPlaying = isCurrentPage && !userPaused && !paused,
-            muted = muted,
-            onProgress = { progress = it },
+        // Surface partagée : n'attache le lecteur UNIQUE qu'à la page courante (player != null).
+        FeedVideoSurface(
+            player = player,
+            thumbnailUrl = video.thumbnailUrl,
             modifier = Modifier.fillMaxSize()
         )
 
         // Indicateur de pause central (façon TikTok) — visible uniquement en pause manuelle.
         androidx.compose.animation.AnimatedVisibility(
-            visible = userPaused && isCurrentPage,
+            visible = showPauseIndicator,
             enter = scaleIn(initialScale = 0.6f) + fadeIn(tween(120)),
             exit = fadeOut(tween(180)),
             modifier = Modifier.align(Alignment.Center)
@@ -201,13 +249,15 @@ fun FeedItem(
                 )
         )
 
-        // Bloc tendance + Défier (top-start, sous le header)
+        // Bloc tendance + Défier — positionné au centre-gauche de l'écran (style TikTok).
+        // En haut-gauche il entrait en conflit visuel avec le header. Mi-écran = zone neutre
+        // où l'œil se pose naturellement entre la vidéo et le HUD du bas.
         if (video.id == "v1") {
             Column(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 14.dp, top = 72.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                    .align(Alignment.CenterStart)
+                    .padding(start = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.Start
             ) {
                 TrendingBadge()
@@ -237,16 +287,30 @@ fun FeedItem(
             )
         }
 
-        // Rail droit épuré : Avatar+Follow, Like, Comment, Gift (MoMo), Send, More
+        // Rail droit : Avatar+Follow, Like, Comment, Gift, Send, More, Disque musical.
+        // bottom = 76dp : le disque (dernier item) s'aligne visuellement avec
+        // la ligne ♬ du BottomInfo à gauche — cohérence horizontale TikTok.
         ActionRail(
             video = video,
             reaction = reaction,
             followed = followed,
-            onReact = { reaction = it },
-            onToggleFollow = { followed = true },
+            onReact = { newReaction ->
+                // La réaction choisie (like/cœur/feu/…) est mémorisée telle quelle → l'icône du
+                // rail affiche le bon sticker. Le backend ne connaît qu'un like booléen.
+                val wasReacted = ReactionMemory.map[video.id] != null
+                if (newReaction != null) ReactionMemory.set(video.id, newReaction)
+                else ReactionMemory.clear(video.id)
+                if ((newReaction != null) != wasReacted) onLike(video.id)
+            },
+            onToggleFollow = { onFollow(video.creatorId) },
+            isSelf = isSelf,
+            onAvatarClick = { onOpenProfile(video.creatorId) },
+            isSaved = video.isSaved,
+            onSaveClick = onSave,
             onCommentClick = onCommentClick,
             onGiftClick = onGiftClick,
-            onShareClick = { shareVideo(context, video) },
+            onGiftCountClick = onGiftCountClick,
+            onShareClick = { shareOpen = true },
             onMoreClick = { moreOpen = true },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -254,36 +318,56 @@ fun FeedItem(
                     alpha = hud
                     translationX = (1f - hud) * 36.dp.toPx()
                 }
-                .padding(end = 10.dp, bottom = 110.dp)
+                .padding(end = 10.dp, bottom = 60.dp + bottomPadding)
         )
 
-        // Bottom info compact
+        // Bottom info compact — 60dp du bas pour respirer au-dessus de la barre de nav.
         BottomInfo(
             video = video,
             followed = followed,
+            isSelf = isSelf,
             captionExpanded = captionExpanded,
             onToggleCaption = { captionExpanded = !captionExpanded },
-            onToggleFollow = { followed = true },
+            onToggleFollow = { onFollow(video.creatorId) },
+            onOpenProfile = { onOpenProfile(video.creatorId) },
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .graphicsLayer {
                     alpha = hud
                     translationY = (1f - hud) * 24.dp.toPx()
                 }
-                .padding(start = 14.dp, end = 78.dp, bottom = 18.dp)
+                .padding(start = 14.dp, end = 82.dp, bottom = 60.dp + bottomPadding)
                 .fillMaxWidth(0.82f)
         )
 
-        // Progress vidéo discrète — 1.5dp en or, fond ardoise. Suit la position d'ExoPlayer.
+        // Progress vidéo scrubbable — trait or discret, s'épaissit au drag (seek façon TikTok).
         VideoProgressBar(
             progress = progress,
+            // Durée du player si déjà résolue, sinon celle annoncée par l'API (chip toujours utile).
+            durationMs = if (durationMs > 0) durationMs else video.durationSec * 1000L,
+            enabled = isCurrentPage,
+            onSeek = onSeek,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 0.dp)
+                .padding(bottom = bottomPadding)
         )
 
         if (moreOpen) {
-            MoreActionsSheet(video = video, onDismiss = { moreOpen = false })
+            MoreActionsSheet(
+                video = video,
+                isSaved = video.isSaved,
+                onToggleSave = onSave,
+                onReport = onReport,
+                onDismiss = { moreOpen = false }
+            )
+        }
+
+        if (shareOpen) {
+            ShareSheet(
+                video = video,
+                onShareTracked = onShare,
+                onDismiss = { shareOpen = false }
+            )
         }
     }
 }
@@ -387,21 +471,31 @@ private fun ActionRail(
     followed: Boolean,
     onReact: (Reaction?) -> Unit,
     onToggleFollow: () -> Unit,
+    isSelf: Boolean,
+    onAvatarClick: () -> Unit,
+    isSaved: Boolean,
+    onSaveClick: () -> Unit,
     onCommentClick: () -> Unit,
     onGiftClick: () -> Unit,
+    onGiftCountClick: () -> Unit,
     onShareClick: () -> Unit,
     onMoreClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        // Espacement resserré + suppression du disque en bas → le rail tient dans l'écran
+        // (avant, la colonne était trop haute et débordait au-dessus du header).
+        verticalArrangement = Arrangement.spacedBy(15.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         AvatarWithFollow(
             avatarIdx = video.creatorAvatarIdx,
             username = video.creatorUsername,
+            avatarUrl = video.avatarUrl,
             followed = followed,
+            isSelf = isSelf,
+            onAvatarClick = onAvatarClick,
             onToggleFollow = onToggleFollow
         )
 
@@ -419,8 +513,21 @@ private fun ActionRail(
             label = "Commentaires"
         )
 
+        // Enregistrer (favoris) — signet plein orange quand sauvegardé.
+        ActionPill(
+            icon = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+            tint = if (isSaved) UnovColors.Accent else Color.White,
+            count = "Enreg.",
+            onClick = onSaveClick,
+            label = "Enregistrer"
+        )
+
         // Bouton Cadeau = différenciateur Mobile Money — gradient or premium.
-        GiftButton(onClick = onGiftClick)
+        GiftButton(
+            giftsFmt = video.giftsFmt,
+            onClick = onGiftClick,
+            onCountClick = onGiftCountClick
+        )
 
         ActionPill(
             icon = Icons.AutoMirrored.Outlined.Send,
@@ -430,7 +537,7 @@ private fun ActionRail(
             label = "Partager"
         )
 
-        // Overflow secondaire : Save, Signaler, Pas intéressé, Copier le lien
+        // Overflow secondaire : Signaler, Pas intéressé, Copier le lien
         MoreButton(onClick = onMoreClick)
     }
 }
@@ -439,66 +546,109 @@ private fun ActionRail(
 private fun AvatarWithFollow(
     avatarIdx: Int,
     username: String,
+    avatarUrl: String?,
     followed: Boolean,
+    isSelf: Boolean,
+    onAvatarClick: () -> Unit,
     onToggleFollow: () -> Unit
 ) {
-    Box(modifier = Modifier.size(58.dp)) {
-        // Ring "tissé" — sweep multi-stops évoque le tissage kente sans figurer un drapeau.
-        // Couleurs : or → ocre brûlée → terre cuite → brun profond → or. Lisible noir sur lumière.
+    // 0 = pas suivi (bordure blanche TikTok), 1 = suivi (ring kente qui surgit en spring).
+    val followProgress by animateFloatAsState(
+        targetValue = if (followed) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "followRing"
+    )
+
+    Box(modifier = Modifier.size(64.dp)) {
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .size(50.dp)
+                .size(56.dp)
                 .clip(CircleShape)
-                .background(
-                    if (followed) {
-                        Brush.linearGradient(listOf(UnovColors.AccentDeep, UnovColors.AccentDeep))
-                    } else {
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onAvatarClick
+                )
+        ) {
+            // Avant le suivi : bordure blanche fine, lisible sur la vidéo (style TikTok).
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = (1f - followProgress).coerceIn(0f, 1f) }
+                    .background(Color.White.copy(alpha = 0.88f))
+            )
+            // Après le suivi : ring kente qui surgit avec un pop spring (récompense visuelle).
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        alpha = followProgress.coerceIn(0f, 1f)
+                        val s = (0.6f + 0.4f * followProgress).coerceAtLeast(0f)
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .background(
                         Brush.sweepGradient(
                             colors = listOf(
                                 UnovColors.Accent,
-                                Color(0xFFC9851F), // ocre brûlée
-                                Color(0xFF8B3A2E), // terre cuite
-                                Color(0xFF3E1F12), // brun profond
+                                Color(0xFFE55F00),
+                                Color(0xFF8B3A14),
+                                Color(0xFF3E1A08),
                                 UnovColors.AccentDeep,
                                 UnovColors.Accent
                             )
                         )
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
+                    )
+            )
+            // Fond sombre + avatar — couche finale au-dessus des deux rings.
             Box(
                 modifier = Modifier
-                    .size(45.dp)
+                    .size(50.dp)
+                    .align(Alignment.Center)
                     .clip(CircleShape)
                     .background(Color(0xFF0A0A0A)),
                 contentAlignment = Alignment.Center
             ) {
-                Avatar(idx = avatarIdx, name = username, size = 41.dp)
+                if (!avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = username,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(46.dp).clip(CircleShape)
+                    )
+                } else {
+                    Avatar(idx = avatarIdx, name = username, size = 46.dp)
+                }
             }
         }
-        // Bouton + / check (suivre)
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .size(22.dp)
-                .clip(CircleShape)
-                .then(
-                    if (followed) Modifier
-                        .background(Color(0xFF0D0D0D))
-                        .border(2.dp, UnovColors.Accent, CircleShape)
-                    else Modifier.background(UnovGradients.Gold)
+
+        // Bouton + (suivre) — masqué sur ses propres vidéos.
+        if (!isSelf) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .then(
+                        if (followed) Modifier
+                            .background(Color(0xFF0D0D0D))
+                            .border(1.5.dp, UnovColors.Accent, CircleShape)
+                        else Modifier.background(UnovGradients.Gold)
+                    )
+                    .clickable(enabled = !followed, onClick = onToggleFollow),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (followed) Icons.Filled.Check else Icons.Filled.Add,
+                    contentDescription = if (followed) "Abonné" else "Suivre",
+                    tint = if (followed) UnovColors.Accent else Color(0xFF0D0D0D),
+                    modifier = Modifier.size(if (followed) 11.dp else 14.dp)
                 )
-                .clickable(enabled = !followed, onClick = onToggleFollow),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = if (followed) Icons.Filled.Check else Icons.Filled.Add,
-                contentDescription = if (followed) "Abonné" else "Suivre",
-                tint = if (followed) UnovColors.Accent else Color(0xFF0D0D0D),
-                modifier = Modifier.size(if (followed) 11.dp else 14.dp)
-            )
+            }
         }
     }
 }
@@ -543,44 +693,55 @@ private fun ActionPill(
             contentDescription = label,
             tint = tint,
             modifier = Modifier
-                .size(30.dp)
+                .size(36.dp)
                 .scale(popScale)
         )
         Text(
             text = count,
             color = Color.White,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
     }
 }
 
 @Composable
-private fun GiftButton(onClick: () -> Unit) {
+private fun GiftButton(
+    giftsFmt: String,
+    onClick: () -> Unit,
+    onCountClick: () -> Unit
+) {
     val noRipple = remember { MutableInteractionSource() }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier.clickable(
-            interactionSource = noRipple,
-            indication = null,
-            onClick = onClick
-        )
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(46.dp)
                 .clip(CircleShape)
-                .background(UnovGradients.Gold),
+                .background(UnovGradients.Gold)
+                .clickable(interactionSource = noRipple, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.Redeem,
-                contentDescription = "Envoyer un cadeau (Mobile Money)",
+                contentDescription = "Envoyer un cadeau",
                 tint = Color(0xFF0D0D0D),
-                modifier = Modifier.size(21.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
+        Text(
+            text = giftsFmt,
+            color = UnovColors.Accent,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onCountClick
+            )
+        )
     }
 }
 
@@ -589,7 +750,7 @@ private fun MoreButton(onClick: () -> Unit) {
     val noRipple = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .size(28.dp)
+            .size(40.dp)
             .clickable(interactionSource = noRipple, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -597,7 +758,7 @@ private fun MoreButton(onClick: () -> Unit) {
             imageVector = Icons.Outlined.MoreHoriz,
             contentDescription = "Plus d'options",
             tint = Color.White.copy(alpha = 0.72f),
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(26.dp)
         )
     }
 }
@@ -608,12 +769,22 @@ private fun MoreButton(onClick: () -> Unit) {
 private fun BottomInfo(
     video: FeedVideoUi,
     followed: Boolean,
+    isSelf: Boolean,
     captionExpanded: Boolean,
     onToggleCaption: () -> Unit,
     onToggleFollow: () -> Unit,
+    onOpenProfile: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val noRipple = remember { MutableInteractionSource() }
+    var nowMs by remember(video.createdAt) { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(video.createdAt) {
+        while (true) {
+            delay(if (video.createdAt.isBlank()) 60_000L else 15_000L)
+            nowMs = System.currentTimeMillis()
+        }
+    }
+    val ageText = remember(video.createdAt, nowMs) { relativePublicationTime(video.createdAt, nowMs) }
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -626,16 +797,21 @@ private fun BottomInfo(
             Text(
                 text = "@${video.creatorUsername}",
                 color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable(
+                    interactionSource = noRipple,
+                    indication = null,
+                    onClick = onOpenProfile
+                )
             )
             Icon(
                 imageVector = Icons.Filled.Verified,
                 contentDescription = "Vérifié",
                 tint = UnovColors.Accent,
-                modifier = Modifier.size(15.dp)
+                modifier = Modifier.size(16.dp)
             )
-            if (!followed) {
+            if (!followed && !isSelf) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
@@ -645,12 +821,12 @@ private fun BottomInfo(
                             indication = null,
                             onClick = onToggleFollow
                         )
-                        .padding(horizontal = 10.dp, vertical = 3.dp)
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = "Suivre",
                         color = Color.White,
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.4.sp
                     )
@@ -663,7 +839,7 @@ private fun BottomInfo(
             text = highlightCaption(video.description),
             color = Color.White,
             fontSize = 14.sp,
-            lineHeight = 19.sp,
+            lineHeight = 20.sp,
             maxLines = if (captionExpanded) Int.MAX_VALUE else 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.clickable(
@@ -673,8 +849,8 @@ private fun BottomInfo(
             )
         )
 
-        // Méta-ligne fusionnée : ville · temps · son original (avec mini-disque qui tourne)
-        MetaRow(creatorUsername = video.creatorUsername)
+        // Méta-ligne fusionnée : 👁 vues · ville · temps · son original
+        MetaRow(creatorUsername = video.creatorUsername, ageText = ageText, viewsFmt = video.viewsFmt)
     }
 }
 
@@ -683,35 +859,50 @@ private fun BottomInfo(
  * Remplace les anciens pills/waveform empilés. Le mini-disque rotatif donne le signal "audio".
  */
 @Composable
-private fun MetaRow(creatorUsername: String) {
+private fun MetaRow(creatorUsername: String, ageText: String, viewsFmt: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        // Compteur de vues (façon TikTok) — masqué si 0/inconnu.
+        if (viewsFmt.isNotBlank() && viewsFmt != "0") {
+            Icon(
+                imageVector = Icons.Outlined.Visibility,
+                contentDescription = "Vues",
+                tint = Color.White.copy(alpha = 0.88f),
+                modifier = Modifier.size(13.dp)
+            )
+            Text(
+                text = "$viewsFmt vues",
+                color = Color.White.copy(alpha = 0.88f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Dot()
+        }
         Icon(
             imageVector = Icons.Filled.Place,
             contentDescription = null,
             tint = UnovColors.Accent,
-            modifier = Modifier.size(11.dp)
+            modifier = Modifier.size(13.dp)
         )
         Text(
             text = "Cotonou",
             color = Color.White.copy(alpha = 0.88f),
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium
         )
         Dot()
         Text(
-            text = "il y a 2 h",
+            text = ageText,
             color = Color.White.copy(alpha = 0.6f),
-            fontSize = 11.sp
+            fontSize = 12.sp
         )
         Dot()
-        MiniMusicDisc()
         Text(
-            text = "Son original · @$creatorUsername",
+            text = "♬ Son original · @$creatorUsername",
             color = Color.White.copy(alpha = 0.88f),
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false)
@@ -743,7 +934,7 @@ private fun MiniMusicDisc() {
     )
     Box(
         modifier = Modifier
-            .size(16.dp)
+            .size(46.dp)
             .rotate(rotation)
             .clip(CircleShape)
             .background(
@@ -751,41 +942,131 @@ private fun MiniMusicDisc() {
                     colors = listOf(Color(0xFF1F1F1F), Color(0xFF3A3A3A), Color(0xFF1F1F1F))
                 )
             )
-            .border(1.dp, UnovColors.Accent.copy(alpha = 0.6f), CircleShape),
+            .border(1.5.dp, UnovColors.Accent.copy(alpha = 0.6f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Outlined.MusicNote,
             contentDescription = null,
             tint = UnovColors.Accent,
-            modifier = Modifier.size(8.dp)
+            modifier = Modifier.size(24.dp)
         )
     }
 }
 
 /* ---------- Progress bar ---------- */
 
+/** m:ss — pour le chip temps affiché pendant le scrub. */
+private fun formatClock(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(total / 60, total % 60)
+}
+
 /**
- * Barre de progression 1.5dp en bas de l'item. Or sur ardoise. Suit ExoPlayer en temps réel
- * (via tick 4 Hz dans VideoPlayer). Discrète mais informative — clé pour le contexte 2G/3G où
- * l'utilisateur veut savoir s'il vaut le coup d'attendre la fin.
+ * Barre de progression **scrubbable** façon TikTok, en bas de l'item.
+ *
+ *  - Au repos : trait discret 2.5dp, or sur ardoise (suit ExoPlayer en temps réel).
+ *  - Drag horizontal (zone de toucher élargie à 32dp) : la barre s'épaissit, un point or
+ *    marque la position visée et un chip « 0:12 / 0:45 » s'affiche au-dessus.
+ *  - Relâchement (ou tap direct) → [onSeek] avec la fraction 0..1 : la vidéo saute là où
+ *    l'utilisateur veut. La lecture continue pendant le drag (comme TikTok) — le seek ne
+ *    part qu'une fois, au relâchement (important sur réseau lent : pas de re-buffer en rafale).
+ *
+ * Le drag est purement HORIZONTAL → les swipes verticaux du pager passent au travers.
  */
 @Composable
-private fun VideoProgressBar(progress: Float, modifier: Modifier = Modifier) {
+private fun VideoProgressBar(
+    progress: Float,
+    durationMs: Long = 0L,
+    enabled: Boolean = false,
+    onSeek: (Float) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    // Fraction visée pendant le scrub — null = pas de scrub en cours (on suit la lecture).
+    var scrub by remember { mutableStateOf<Float?>(null) }
+    val shown = (scrub ?: progress).coerceIn(0f, 1f)
+    val scrubbing = scrub != null
+
+    val barHeight by animateDpAsState(
+        targetValue = if (scrubbing) 7.dp else 2.5.dp,
+        animationSpec = tween(durationMillis = 160),
+        label = "barHeight"
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(2.5.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(Color.White.copy(alpha = 0.16f))
+            // Zone de toucher généreuse (32dp) autour d'un trait de 2.5dp, sinon impossible
+            // à attraper au doigt. Le rendu visuel reste collé en bas.
+            .height(32.dp)
+            .then(
+                if (enabled) Modifier
+                    .pointerInput(durationMs) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { offset -> scrub = (offset.x / size.width).coerceIn(0f, 1f) },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                scrub = ((scrub ?: 0f) + dragAmount / size.width).coerceIn(0f, 1f)
+                            },
+                            onDragEnd = { scrub?.let(onSeek); scrub = null },
+                            onDragCancel = { scrub = null }
+                        )
+                    }
+                    .pointerInput(durationMs) {
+                        detectTapGestures { offset -> onSeek((offset.x / size.width).coerceIn(0f, 1f)) }
+                    }
+                else Modifier
+            )
     ) {
+        // Chip temps pendant le scrub : « position visée / durée totale ».
+        if (scrubbing && durationMs > 0) {
+            Text(
+                text = "${formatClock((shown * durationMs).toLong())} / ${formatClock(durationMs)}",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 10.dp, vertical = 3.dp)
+            )
+        }
+
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(barHeight)
                 .clip(RoundedCornerShape(999.dp))
-                .background(UnovGradients.Gold)
-        )
+                .background(Color.White.copy(alpha = if (scrubbing) 0.28f else 0.16f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(shown)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(UnovGradients.Gold)
+            )
+        }
+        // Point de repère or au bout de la barre pendant le scrub.
+        if (scrubbing) {
+            BoxWithConstraints(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(barHeight)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset(x = maxWidth * shown - 6.dp)
+                        .align(Alignment.CenterStart)
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(UnovColors.Accent)
+                )
+            }
+        }
     }
 }
 
@@ -803,5 +1084,38 @@ private fun highlightCaption(text: String): AnnotatedString = buildAnnotatedStri
             ) { append(t) }
             else -> append(t)
         }
+    }
+}
+
+
+private fun relativePublicationTime(createdAt: String, nowMs: Long): String {
+    val publishedMs = parseIsoUtc(createdAt) ?: return "il y a 2 h"
+    val diff = (nowMs - publishedMs).coerceAtLeast(0L)
+    return when {
+        diff < 60_000L -> "à l'instant"
+        diff < 3_600_000L -> "il y a ${diff / 60_000L} min"
+        diff < 86_400_000L -> "il y a ${diff / 3_600_000L} h"
+        diff < 7L * 86_400_000L -> "il y a ${diff / 86_400_000L} j"
+        else -> {
+            val sdf = SimpleDateFormat("d MMM", Locale.FRENCH)
+            sdf.format(java.util.Date(publishedMs))
+        }
+    }
+}
+
+private fun parseIsoUtc(value: String): Long? {
+    if (value.isBlank()) return null
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+        "yyyy-MM-dd'T'HH:mm:ssXXX"
+    )
+    return patterns.firstNotNullOfOrNull { pattern ->
+        runCatching {
+            SimpleDateFormat(pattern, Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }.parse(value)?.time
+        }.getOrNull()
     }
 }

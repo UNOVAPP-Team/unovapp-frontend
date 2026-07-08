@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -36,11 +37,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +57,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.ShimmerBox
 import com.unovapp.android.ui.components.StaggerReveal
 import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.theme.UnovColors
@@ -66,33 +71,51 @@ data class CommentUi(
     val pinned: Boolean,
     val text: String,
     val time: String,
-    val likesFmt: String
+    val likesFmt: String,
+    val avatarUrl: String? = null,
+    val likesCount: Int = 0,
+    val isLiked: Boolean = false,
+    val repliesCount: Int = 0,
+    val isAuthor: Boolean = false,
+    val mentions: List<String> = emptyList()
 )
 
-private val MockComments = listOf(
-    CommentUi("c1", 0, "aminata.cot", verified = true, pinned = true,
-        "Trop fort 😂 vous m'avez tué", "2 h", "412"),
-    CommentUi("c2", 1, "kossi.dance", verified = false, pinned = false,
-        "C'est mon vendredi ça 🔥", "1 h", "89"),
-    CommentUi("c3", 4, "samuel228", verified = false, pinned = false,
-        "🇧🇯🇧🇯 fier de toi !", "3 h", "67"),
-    CommentUi("c4", 2, "reezy_naija", verified = true, pinned = false,
-        "Lagos vibes 🔥 keep it up bro", "5 h", "234"),
-    CommentUi("c5", 3, "ange_ptn", verified = false, pinned = false,
-        "Ma maman c'est exactement ça mdr", "1 h", "156"),
-    CommentUi("c6", 5, "mariama_dak", verified = false, pinned = false,
-        "Recette stp 🙏🙏", "30 min", "42")
-)
+/**
+ * Rangée squelette (shimmer) affichée pendant le chargement des commentaires.
+ * Remplace les anciens commentaires mockés qui apparaissaient brièvement avant les vraies
+ * données — trompeur pour l'utilisateur ; le squelette annonce un chargement, sans mentir.
+ */
+@Composable
+private fun CommentSkeletonRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        ShimmerBox(modifier = Modifier.size(36.dp), shape = CircleShape)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ShimmerBox(modifier = Modifier.height(12.dp).fillMaxWidth(0.35f))
+            ShimmerBox(modifier = Modifier.height(12.dp).fillMaxWidth(0.8f))
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommentsSheet(
+    videoId: String,
     commentCountFmt: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isVideoOwner: Boolean = false,
+    vm: CommentsViewModel = hiltViewModel()
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var text by remember { mutableStateOf("") }
     val likes = remember { mutableStateMapOf<String, Boolean>() }
+    val state by vm.state.collectAsState()
+
+    LaunchedEffect(videoId) { vm.load(videoId) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -139,18 +162,40 @@ fun CommentsSheet(
         }
         Divider()
 
-        // Commentaires en stagger entry — chaque ligne arrive avec slide+fade séquentiel
+        val displayComments = state.comments
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            itemsIndexed(MockComments, key = { _, c -> c.id }) { index, c ->
+            // Chargement initial : squelettes shimmer (jamais de fausses données).
+            if (state.isLoading && displayComments.isEmpty()) {
+                items(5) { CommentSkeletonRow() }
+            }
+            itemsIndexed(displayComments, key = { _, c -> c.id }) { index, c ->
                 StaggerReveal(index = index) {
                     CommentRow(
                         c = c,
-                        liked = likes[c.id] ?: false,
-                        onToggleLike = { likes[c.id] = !(likes[c.id] ?: false) }
+                        liked = c.isLiked,
+                        onToggleLike = { vm.toggleCommentLike(c.id) },
+                        canPin = isVideoOwner,
+                        onTogglePin = { vm.togglePin(c.id) }
                     )
+                }
+            }
+            if (!state.isLoading && displayComments.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Aucun commentaire pour l'instant",
+                            color = UnovColors.TextMute,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }
@@ -223,7 +268,13 @@ fun CommentsSheet(
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                SendButton(active = text.isNotBlank(), onClick = { text = "" })
+                SendButton(
+                    active = text.isNotBlank() && !state.isSending,
+                    onClick = {
+                        vm.send(videoId, text)
+                        text = ""
+                    }
+                )
             }
         }
     }
@@ -275,7 +326,9 @@ private fun SendButton(active: Boolean, onClick: () -> Unit) {
 private fun CommentRow(
     c: CommentUi,
     liked: Boolean,
-    onToggleLike: () -> Unit
+    onToggleLike: () -> Unit,
+    canPin: Boolean = false,
+    onTogglePin: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
@@ -307,15 +360,20 @@ private fun CommentRow(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
+                            .background(UnovColors.Accent.copy(alpha = 0.15f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text("📌 Épinglé", color = UnovColors.Accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (c.isAuthor) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
                             .background(UnovColors.SurfaceAlt)
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
-                        Text(
-                            text = "Épinglé",
-                            color = UnovColors.TextDim,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("Auteur", color = UnovColors.TextDim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -344,6 +402,16 @@ private fun CommentRow(
                         .clip(RoundedCornerShape(4.dp))
                         .unovTap(onClick = {}, pressedScale = 0.92f)
                 )
+                if (c.repliesCount > 0) {
+                    Text("${c.repliesCount} réponse${if (c.repliesCount > 1) "s" else ""}", color = UnovColors.TextMute, fontSize = 12.sp)
+                }
+                if (canPin) {
+                    Text(
+                        if (c.pinned) "Désépingler" else "Épingler",
+                        color = UnovColors.Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(4.dp)).unovTap(onClick = onTogglePin, pressedScale = 0.92f)
+                    )
+                }
             }
         }
         // Like avec crossfade outline ↔ filled + scale pop
