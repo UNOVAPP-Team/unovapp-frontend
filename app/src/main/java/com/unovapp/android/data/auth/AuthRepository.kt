@@ -29,8 +29,15 @@ interface AuthRepository {
     /** Demande un email de réinitialisation de mot de passe. */
     suspend fun forgotPassword(email: String): NetworkResult<Unit>
 
-    /** Réinitialise le mot de passe avec le token reçu par email. */
-    suspend fun resetPassword(token: String, newPassword: String): NetworkResult<Unit>
+    /** Réinitialise le mot de passe avec le code OTP reçu par email (1 étape). */
+    suspend fun resetPassword(email: String, otpCode: String, newPassword: String): NetworkResult<Unit>
+
+    /** Change le mot de passe (Bearer requis). Force la reconnexion sur les autres appareils. */
+    suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+        confirmPassword: String
+    ): NetworkResult<Unit>
 
     suspend fun sendOtp(phoneNumber: String): NetworkResult<Unit>
 
@@ -47,7 +54,7 @@ interface AuthRepository {
 }
 
 /**
- * Implémentation réelle — câblée sur `unovapp-auth.onrender.com`.
+ * Implémentation réelle — câblée sur la passerelle `http://152.239.118.90/api/v1/` (auth).
  *
  * Flow attendu par le backend NestJS :
  *  1. `register(email, username, password, phone?)` → tokens.
@@ -117,8 +124,23 @@ class AuthRepositoryImpl(
         Unit
     }
 
-    override suspend fun resetPassword(token: String, newPassword: String): NetworkResult<Unit> = safeCall {
-        api.resetPassword(ResetPasswordRequest(token = token, newPassword = newPassword))
+    override suspend fun resetPassword(email: String, otpCode: String, newPassword: String): NetworkResult<Unit> = safeCall {
+        api.resetPassword(ResetPasswordRequest(email = email, otpCode = otpCode, newPassword = newPassword))
+        Unit
+    }
+
+    override suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+        confirmPassword: String
+    ): NetworkResult<Unit> = safeCall {
+        api.changePassword(
+            ChangePasswordRequest(
+                currentPassword = currentPassword,
+                newPassword = newPassword,
+                confirmPassword = confirmPassword
+            )
+        )
         Unit
     }
 
@@ -214,7 +236,16 @@ class AuthRepositoryStub(
         return NetworkResult.Success(Unit)
     }
 
-    override suspend fun resetPassword(token: String, newPassword: String): NetworkResult<Unit> {
+    override suspend fun resetPassword(email: String, otpCode: String, newPassword: String): NetworkResult<Unit> {
+        delay(500)
+        return NetworkResult.Success(Unit)
+    }
+
+    override suspend fun changePassword(
+        currentPassword: String,
+        newPassword: String,
+        confirmPassword: String
+    ): NetworkResult<Unit> {
         delay(500)
         return NetworkResult.Success(Unit)
     }

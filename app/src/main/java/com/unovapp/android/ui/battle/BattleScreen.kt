@@ -268,7 +268,7 @@ private fun VoteBar(
                     .fillMaxHeight()
                     .background(
                         Brush.horizontalGradient(
-                            colors = listOf(Color(0xFFF5CF6E), UnovColors.Accent)
+                            colors = listOf(Color(0xFFFF944D), UnovColors.Accent)
                         )
                     )
             )
@@ -278,7 +278,7 @@ private fun VoteBar(
                     .fillMaxHeight()
                     .background(
                         Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF2A1F08), Color(0xFF1A1408))
+                            colors = listOf(Color(0xFF2A1606), Color(0xFF1A0E00))
                         )
                     )
             )
@@ -292,13 +292,13 @@ private fun VoteBar(
             val pctAInt = (pctA * 100).toInt()
             Text(
                 text = "$pctAInt% · ${formatVotes(votesA)}",
-                color = Color(0xFFF5CF6E),
+                color = Color(0xFFFF944D),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = "${formatVotes(votesB)} · ${100 - pctAInt}%",
-                color = Color(0xFFFFE4B5),
+                color = Color(0xFFFFD2A6),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -363,7 +363,7 @@ private fun RingedAvatar(idx: Int, username: String) {
                 Brush.sweepGradient(
                     listOf(
                         UnovColors.Accent,
-                        Color(0xFFF4C430),
+                        Color(0xFFFF944D),
                         UnovColors.AccentDeep,
                         UnovColors.Accent
                     )
@@ -482,7 +482,7 @@ private fun BottomCtaBar(modifier: Modifier = Modifier) {
         VoteButton(
             label = "Voter A",
             background = Brush.linearGradient(
-                listOf(Color(0xFFF5CF6E), UnovColors.Accent)
+                listOf(Color(0xFFFF944D), UnovColors.Accent)
             ),
             textColor = Color(0xFF0D0D0D),
             modifier = Modifier.weight(1f)
@@ -491,7 +491,7 @@ private fun BottomCtaBar(modifier: Modifier = Modifier) {
         VoteButton(
             label = "Voter B",
             background = Brush.linearGradient(
-                listOf(Color(0xFF2A1F08), Color(0xFF1A1408))
+                listOf(Color(0xFF2A1606), Color(0xFF1A0E00))
             ),
             textColor = Color.White,
             modifier = Modifier.weight(1f)

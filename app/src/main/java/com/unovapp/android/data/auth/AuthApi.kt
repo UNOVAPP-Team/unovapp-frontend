@@ -1,11 +1,14 @@
 package com.unovapp.android.data.auth
 
 import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 /**
- * Endpoints Auth UNOVAPP — alignés sur l'OpenAPI du service `unovapp-auth`.
- * Voir : https://unovapp-auth.onrender.com/api/docs
+ * Endpoints Auth UNOVAPP — passerelle unique, chemins `/api/v1/auth/…` (service auth NestJS).
  *
  * Flux d'inscription (nouveau contrat backend) :
  *  1. register(email, username, password, phone?) → envoie un CODE OTP par EMAIL (message, pas de tokens)
@@ -53,4 +56,34 @@ interface AuthApi {
     /** Publique. Réinitialise le mot de passe avec le token reçu par email. */
     @POST("auth/reset-password")
     suspend fun resetPassword(@Body body: ResetPasswordRequest): MessageResponse
+
+    /** Bearer requis. Change le mot de passe de l'utilisateur connecté. */
+    @PATCH("auth/change-password")
+    suspend fun changePassword(@Body body: ChangePasswordRequest): MessageResponse
+
+    /* ---------- Sprint 2 ---------- */
+
+    /** Bearer requis. Démarre le changement d'email (code envoyé sur la NOUVELLE adresse). */
+    @POST("auth/change-email")
+    suspend fun changeEmail(@Body body: ChangeEmailRequest): MessageResponse
+
+    /** Bearer requis. Confirme le nouvel email avec le code reçu. */
+    @POST("auth/verify-email-change")
+    suspend fun verifyEmailChange(@Body body: OtpCodeRequest): EmailResponse
+
+    /** Publique. Alias explicite de send-otp (OTP SMS). */
+    @POST("auth/send-phone-otp")
+    suspend fun sendPhoneOtp(@Body body: SendOtpRequest): MessageResponse
+
+    /** Bearer requis. Alias explicite de verify-otp. */
+    @POST("auth/verify-phone")
+    suspend fun verifyPhone(@Body body: VerifyOtpRequest): VerifiedResponse
+
+    /** Bearer requis. Liste des appareils/sessions connectés. */
+    @GET("auth/sessions")
+    suspend fun sessions(): List<SessionDto>
+
+    /** Bearer requis. Déconnecte un appareil à distance. */
+    @DELETE("auth/sessions/{id}")
+    suspend fun revokeSession(@Path("id") id: String): MessageResponse
 }

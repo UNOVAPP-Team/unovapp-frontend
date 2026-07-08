@@ -108,7 +108,7 @@ fun OnboardingScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF050505))
+                .background(Color(0xFF0D0D0D))
         ) {
             AmbientOrbs()
 
@@ -462,7 +462,7 @@ private fun WalletVisual() {
 @Composable
 private fun AvatarsStack() {
     val palette = listOf(
-        Color(0xFF7B2D5C), Color(0xFFE5722D), Color(0xFF1A4D8C), Color(0xFFC9A227)
+        Color(0xFFFF6A00), Color(0xFFE5722D), Color(0xFFE55F00), Color(0xFFFF944D)
     )
     Box(modifier = Modifier.size(width = 58.dp, height = 22.dp)) {
         palette.forEachIndexed { i, c ->
@@ -471,7 +471,7 @@ private fun AvatarsStack() {
                     .offset(x = (i * 12).dp)
                     .size(22.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF050505))
+                    .background(Color(0xFF0D0D0D))
                     .padding(2.dp)
                     .clip(CircleShape)
                     .background(c)

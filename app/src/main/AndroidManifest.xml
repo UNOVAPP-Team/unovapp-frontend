@@ -1,13 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Notifications (Android 13+) + service de premier plan pour le téléchargement vidéo
+         qui doit continuer même si l'app passe en arrière-plan. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+
+    <!-- Caméra in-app (enregistrement vidéo) + micro pour le son. Caméra non requise
+         (l'app reste utilisable via l'import galerie) → required=false. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-feature android:name="android.hardware.camera.any" android:required="false"/>
+    <uses-feature android:name="android.hardware.microphone" android:required="false"/>
+
     <application
         android:name=".UnovApp"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:localeConfig="@xml/locales_config"
-        android:theme="@style/Theme.UnovApp.Splash">
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/Theme.UnovApp.Splash"
+        android:allowBackup="false">
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -16,20 +32,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Deep link de vérification email (lien https du backend).
-                 autoVerify requiert un assetlinks.json hébergé sur le domaine backend
-                 pour ouvrir l'app sans dialogue. Sinon Android propose un choix app/navigateur. -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-                <category android:name="android.intent.category.BROWSABLE"/>
-                <data
-                    android:scheme="https"
-                    android:host="unovapp-auth.onrender.com"
-                    android:pathPrefix="/api/v1/auth/verify-email"/>
-            </intent-filter>
-
-            <!-- Schéma custom (si le backend met un lien `unovapp://verify-email?token=...`). -->
+            <!-- La vérification d'email se fait désormais par code OTP saisi dans l'app
+                 (plus de lien web), donc plus de deep link https vers le backend.
+                 On conserve uniquement le schéma custom au cas où un email contiendrait
+                 un lien `unovapp://verify-email?token=...`. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -37,5 +43,11 @@
                 <data android:scheme="unovapp" android:host="verify-email"/>
             </intent-filter>
         </activity>
+
+        <!-- Téléchargement de vidéo en arrière-plan (continue même app minimisée). -->
+        <service
+            android:name=".download.DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
     </application>
 </manifest>

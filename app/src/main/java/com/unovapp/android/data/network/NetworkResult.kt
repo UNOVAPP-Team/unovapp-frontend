@@ -67,6 +67,12 @@ internal fun parseHttpError(e: HttpException): ApiError {
 
     return when (code) {
         401 -> ApiError.Unauthorized(msg ?: "Session expirée. Reconnecte-toi.")
+        // 429 = rate-limit serveur : condition temporaire, à retraiter comme une erreur
+        // serveur pour déclencher le retry avec backoff dans les ViewModels.
+        429 -> ApiError.Server(
+            userMessage = "Trop de requêtes. Réessaie dans quelques instants.",
+            httpStatus = 429
+        )
         in 400..499 -> ApiError.Business(
             code = errCode,
             userMessage = msg ?: "Requête invalide.",

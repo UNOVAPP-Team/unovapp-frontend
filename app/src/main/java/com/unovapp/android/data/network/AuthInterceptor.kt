@@ -1,13 +1,15 @@
 package com.unovapp.android.data.network
 
 import com.unovapp.android.TokenDataStore
-import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 
 /**
  * Ajoute `Authorization: Bearer <jwt>` à toutes les requêtes sortantes — sauf les routes
  * d'auth publiques (login, register, refresh, send-otp) qui ne nécessitent pas de token.
+ *
+ * Utilise readAccessTokenSync() (EncryptedSharedPreferences, lecture synchrone) pour éviter
+ * tout runBlocking sur le thread OkHttp — supprime le risque d'ANR.
  */
 class AuthInterceptor(
     private val tokenStore: TokenDataStore
@@ -21,7 +23,7 @@ class AuthInterceptor(
             return chain.proceed(original)
         }
 
-        val token = runBlocking { tokenStore.readAccessToken() }
+        val token = tokenStore.readAccessTokenSync()
         val request = if (token != null) {
             original.newBuilder()
                 .header("Authorization", "Bearer $token")
@@ -37,7 +39,10 @@ class AuthInterceptor(
             "/auth/register",
             "/auth/verify-email",
             "/auth/refresh",
-            "/auth/send-otp"
+            "/auth/send-otp",
+            "/auth/forgot-password",
+            "/auth/reset-password",
+            "/auth/google"
         )
     }
 }

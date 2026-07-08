@@ -108,7 +108,7 @@ private val MOCK_NOTIFICATIONS = listOf(
         "t'a envoyé un cadeau premium 💎", "1 j")
 )
 
-private val SuccessGreen = Color(0xFF4ADE80)
+private val SuccessGreen = Color(0xFF22C55E)
 
 @Composable
 fun InboxScreen(contentPadding: PaddingValues = PaddingValues(0.dp)) {

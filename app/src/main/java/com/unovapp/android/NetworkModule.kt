@@ -1,10 +1,15 @@
 package com.unovapp.android
 
+import com.unovapp.android.data.auth.AccountRepository
+import com.unovapp.android.data.auth.AccountRepositoryImpl
 import com.unovapp.android.data.auth.AuthApi
 import com.unovapp.android.data.auth.AuthRepository
 import com.unovapp.android.data.auth.AuthRepositoryImpl
 import com.unovapp.android.data.auth.AuthRepositoryStub
 import com.unovapp.android.data.auth.GoogleSignInHelper
+import com.unovapp.android.data.notification.NotificationApi
+import com.unovapp.android.data.notification.NotificationRepository
+import com.unovapp.android.data.notification.NotificationRepositoryImpl
 import com.unovapp.android.data.network.AuthInterceptor
 import com.unovapp.android.data.network.RetryInterceptor
 import com.unovapp.android.data.network.TokenAuthenticator
@@ -14,6 +19,10 @@ import com.unovapp.android.data.social.SocialRepositoryImpl
 import com.unovapp.android.data.user.UserApi
 import com.unovapp.android.data.user.UserRepository
 import com.unovapp.android.data.user.UserRepositoryImpl
+import com.unovapp.android.data.user.UserProfileStore
+import com.unovapp.android.data.video.VideoApi
+import com.unovapp.android.data.video.VideoRepository
+import com.unovapp.android.data.video.VideoRepositoryImpl
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -81,7 +90,8 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideUserRepository(api: UserApi): UserRepository = UserRepositoryImpl(api)
+    fun provideUserRepository(api: UserApi, profileStore: UserProfileStore): UserRepository =
+        UserRepositoryImpl(api, profileStore)
 
     // --- Service Social (3e Retrofit, même OkHttpClient → Bearer + refresh partagés) ---
 
@@ -99,6 +109,23 @@ object NetworkModule {
     @Singleton
     fun provideSocialRepository(api: SocialApi): SocialRepository = SocialRepositoryImpl(api)
 
+    // --- Service Vidéo (4ᵉ Retrofit, même OkHttpClient → Bearer + refresh partagés) ---
+
+    @Provides
+    @Singleton
+    fun provideVideoApi(okHttpClient: OkHttpClient): VideoApi =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.VIDEO_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(VideoApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideVideoRepository(api: VideoApi, okHttpClient: OkHttpClient): VideoRepository =
+        VideoRepositoryImpl(api, okHttpClient)
+
     @Provides
     @Singleton
     fun provideAuthRepository(
@@ -108,4 +135,25 @@ object NetworkModule {
     ): AuthRepository =
         if (BuildConfig.USE_STUB_AUTH) AuthRepositoryStub(tokenStore)
         else AuthRepositoryImpl(api, tokenStore, googleSignInHelper)
+
+    // --- Compte (sessions, changement d'email) — réutilise l'AuthApi ---
+    @Provides
+    @Singleton
+    fun provideAccountRepository(api: AuthApi): AccountRepository = AccountRepositoryImpl(api)
+
+    // --- Notifications (5ᵉ Retrofit, même OkHttpClient → Bearer partagé) ---
+    @Provides
+    @Singleton
+    fun provideNotificationApi(okHttpClient: OkHttpClient): NotificationApi =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.AUTH_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(NotificationApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideNotificationRepository(api: NotificationApi): NotificationRepository =
+        NotificationRepositoryImpl(api)
 }

@@ -91,7 +91,7 @@ private val PACKS = listOf(
     JetonPack(5000, "22 000 FCFA", bonus = "+20%")
 )
 
-private val SuccessGreen = Color(0xFF4ADE80)
+private val SuccessGreen = Color(0xFF22C55E)
 
 @Composable
 fun WalletScreen(
@@ -120,7 +120,7 @@ fun WalletScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF050505))
+                .background(Color(0xFF0D0D0D))
         ) {
             AnimatedContent(
                 targetState = step,

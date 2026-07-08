@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Symbole UNOVAPP : deux crochets. Crème (haut-gauche) + orange (bas-droite).
+         Réduit à 0,7 autour du centre → plus d'air (les launchers zooment l'avant-plan adaptatif). -->
+    <group
+        android:scaleX="0.7"
+        android:scaleY="0.7"
+        android:pivotX="50"
+        android:pivotY="50">
+        <path
+            android:pathData="M26,52 L26,33 C26,28.6 28.6,26 33,26 L52,26"
+            android:strokeColor="#F5F1EA"
+            android:strokeWidth="14"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M74,48 L74,67 C74,71.4 71.4,74 67,74 L48,74"
+            android:strokeColor="#C65A2E"
+            android:strokeWidth="14"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

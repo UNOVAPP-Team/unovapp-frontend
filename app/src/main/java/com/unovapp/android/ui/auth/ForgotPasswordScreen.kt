@@ -48,19 +48,19 @@ import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
 
 /**
- * Flux mot de passe oublié :
- *  1. Email → forgot-password (le backend envoie un token par email).
- *  2. Token reçu + nouveau mot de passe → reset-password → retour à la connexion.
+ * Flux mot de passe oublié (OTP email, en 1 étape pour la réinit) :
+ *  1. Email → forgot-password (le backend envoie un code OTP 6 chiffres par email).
+ *  2. Email + code OTP + nouveau mot de passe → reset-password → retour à la connexion.
  */
 @Composable
 fun ForgotPasswordScreen(
     initialEmail: String,
     onForgot: (email: String, onDone: (String?) -> Unit) -> Unit,
-    onReset: (token: String, newPassword: String, onDone: (String?) -> Unit) -> Unit,
+    onReset: (email: String, otpCode: String, newPassword: String, onDone: (String?) -> Unit) -> Unit,
     onDismiss: () -> Unit
 ) {
     var email by remember { mutableStateOf(initialEmail) }
-    var token by remember { mutableStateOf("") }
+    var otpCode by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var sent by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
@@ -68,12 +68,12 @@ fun ForgotPasswordScreen(
     var info by remember { mutableStateOf<String?>(null) }
 
     val emailValid = email.contains("@") && email.contains(".")
-    val resetValid = token.isNotBlank() && newPassword.length >= 8
+    val resetValid = otpCode.length == 6 && newPassword.length >= 8
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050505))
+            .background(Color(0xFF0D0D0D))
             .windowInsetsPadding(WindowInsets.systemBars)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
@@ -131,7 +131,7 @@ fun ForgotPasswordScreen(
             info?.let {
                 Text(it, color = UnovColors.Accent, fontSize = 13.sp, modifier = Modifier.padding(bottom = 16.dp))
             }
-            Field("CODE / TOKEN REÇU PAR EMAIL", token, { token = it.trim(); error = null }, KeyboardType.Text)
+            Field("CODE À 6 CHIFFRES REÇU PAR EMAIL", otpCode, { otpCode = it.filter(Char::isDigit).take(6); error = null }, KeyboardType.Number, helper = "Code de réinitialisation (valable 15 min)")
             Spacer(Modifier.height(16.dp))
             Field("NOUVEAU MOT DE PASSE", newPassword, { newPassword = it; error = null }, KeyboardType.Password, isPassword = true, helper = "8 caractères minimum")
             Spacer(Modifier.height(20.dp))
@@ -141,7 +141,7 @@ fun ForgotPasswordScreen(
                 loading = loading
             ) {
                 loading = true; error = null
-                onReset(token, newPassword) { err ->
+                onReset(email, otpCode, newPassword) { err ->
                     loading = false
                     if (err == null) onDismiss() else error = err
                 }

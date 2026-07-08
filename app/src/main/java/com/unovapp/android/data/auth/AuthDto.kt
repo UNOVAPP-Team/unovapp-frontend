@@ -32,7 +32,7 @@ data class VerifyEmailRequest(
 )
 
 data class RefreshTokenRequest(
-    @SerializedName("refresh_token") val refreshToken: String
+    val refreshToken: String
 )
 
 data class GoogleSignInRequest(
@@ -43,9 +43,40 @@ data class ForgotPasswordRequest(
     val email: String
 )
 
+/**
+ * Réinitialisation en une étape : email + code OTP (6 chiffres) reçu par email + nouveau
+ * mot de passe. Cf. POST /auth/reset-password — body { email, otp_code, newPassword }.
+ */
 data class ResetPasswordRequest(
-    val token: String,
+    val email: String,
+    @SerializedName("otp_code") val otpCode: String,
     val newPassword: String
+)
+
+data class ChangePasswordRequest(
+    val currentPassword: String,
+    val newPassword: String,
+    val confirmPassword: String
+)
+
+/* ---------- Sprint 2 : changement d'email, vérif téléphone, sessions ---------- */
+
+data class ChangeEmailRequest(val newEmail: String)
+
+/** Confirmation par code OTP (changement d'email). */
+data class OtpCodeRequest(@SerializedName("otp_code") val otpCode: String)
+
+data class EmailResponse(val email: String)
+
+data class VerifiedResponse(val verified: Boolean = false)
+
+/** Une session/appareil connecté (GET /auth/sessions). */
+data class SessionDto(
+    val id: String,
+    @SerializedName("device_info") val deviceInfo: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("last_used_at") val lastUsedAt: String? = null,
+    @SerializedName("is_current") val isCurrent: Boolean = false
 )
 
 /* ---------- Réponses ----------

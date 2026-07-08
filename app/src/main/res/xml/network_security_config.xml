@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Politique de sécurité réseau.
+    - Par défaut : tout trafic HTTP (cleartext) est bloqué ; seul HTTPS est autorisé.
+    - Exception 1 : la passerelle de production 152.239.118.90 est servie en HTTP (pas
+      encore de domaine + SSL). On autorise le cleartext UNIQUEMENT pour cette IP, le
+      temps d'ajouter un nom de domaine + certificat (passage en HTTPS → on retire l'entrée).
+    - Exception 2 : localhost / 10.0.2.2 (émulateur) pour le débogage local.
+
+    Quand le backend passera en HTTPS (domaine + SSL), supprimer le domain-config de l'IP
+    et envisager le certificate pinning ci-dessous.
+-->
+<network-security-config>
+
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- Passerelle de production (VPS Hostinger) — HTTP en clair, provisoire. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">152.239.118.90</domain>
+    </domain-config>
+
+    <!-- HTTP autorisé uniquement sur localhost (émulateur / tests locaux). -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+
+</network-security-config>

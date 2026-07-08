@@ -1,6 +1,7 @@
 package com.unovapp.android.data.network
 
 import android.util.Log
+import com.unovapp.android.BuildConfig
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
@@ -33,16 +34,18 @@ class RetryInterceptor(
             try {
                 lastResponse?.close()
                 val response = chain.proceed(request)
-                if (response.isSuccessful || response.code in 400..499 || !safe) {
+                // 429 (rate-limit) et 5xx → retry si safe.
+                // Les autres 4xx sont des erreurs client définitives : on ne retente pas.
+                val isRetryable = response.code == 429 || response.code in 500..599
+                if (response.isSuccessful || (!isRetryable) || !safe) {
                     return response
                 }
-                // 5xx → retry si safe
                 lastResponse = response
-                Log.w(TAG, "5xx received (code=${response.code}), retry attempt=${attempt + 1}")
+                if (BuildConfig.DEBUG) Log.w(TAG, "HTTP ${response.code} received, retry attempt=${attempt + 1}")
             } catch (e: IOException) {
                 lastFailure = e
                 if (!safe) throw e
-                Log.w(TAG, "IO failure: ${e.message}, retry attempt=${attempt + 1}")
+                if (BuildConfig.DEBUG) Log.w(TAG, "IO failure: ${e.message}, retry attempt=${attempt + 1}")
             }
 
             attempt++

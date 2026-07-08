@@ -3,6 +3,7 @@ package com.unovapp.android.ui.auth
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.unovapp.android.BuildConfig
 import com.unovapp.android.data.auth.AuthRepository
 import com.unovapp.android.data.network.ApiError
 import com.unovapp.android.data.network.NetworkResult
@@ -189,44 +190,54 @@ class AuthViewModel @Inject constructor(
                         handleAuthError(r.error, RetryAction.SubmitForm)
                 }
             } else {
-                // Inscription : le backend envoie un code OTP par EMAIL → étape de saisie du code.
-                val r = repository.register(
-                    email = s.email,
-                    username = s.username,
-                    password = s.password,
-                    phoneNumber = if (s.phoneProvided) s.phoneE164 else null
-                )
-                when (r) {
-                    is NetworkResult.Success -> {
-                        _state.update {
-                            it.copy(
-                                step = AuthStep.Otp,
-                                isLoading = false,
-                                otp = List(OTP_LENGTH) { "" },
-                                otpError = null,
-                                countdown = RESEND_COUNTDOWN_SEC,
-                                networkError = null,
-                                infoMessage = "Code à 6 chiffres envoyé à ${s.email}"
-                            )
-                        }
-                        startCountdown()
-                    }
-                    is NetworkResult.Failure -> {
-                        if (r.error.isLikelyDuplicate()) {
-                            _state.update {
-                                it.copy(
-                                    isLoading = false,
-                                    networkError = "${r.error.debugDetail}\n→ email, pseudo ou numéro peut-être déjà utilisé ?",
-                                    retryAction = null
-                                )
-                            }
-                        } else {
-                            handleAuthError(r.error, RetryAction.SubmitForm)
-                        }
-                    }
-                }
+                doRegister(s, attempt = 0)
             }
         }
+    }
+
+    private suspend fun doRegister(s: AuthUiState, attempt: Int) {
+        val r = repository.register(
+            email = s.email,
+            username = s.username,
+            password = s.password,
+            phoneNumber = if (s.phoneProvided) s.phoneE164 else null
+        )
+        when (r) {
+            is NetworkResult.Success -> {
+                _state.update {
+                    it.copy(
+                        step = AuthStep.Otp,
+                        isLoading = false,
+                        otp = List(OTP_LENGTH) { "" },
+                        otpError = null,
+                        countdown = RESEND_COUNTDOWN_SEC,
+                        networkError = null,
+                        infoMessage = "Code à 6 chiffres envoyé à ${s.email}"
+                    )
+                }
+                startCountdown()
+            }
+            is NetworkResult.Failure -> when {
+                r.error.isLikelyDuplicate() -> _state.update {
+                    it.copy(
+                        isLoading = false,
+                        networkError = "${r.error.displayMessage()}\n→ email, pseudo ou numéro peut-être déjà utilisé ?",
+                        retryAction = null
+                    )
+                }
+                r.error is ApiError.Server && attempt < MAX_REGISTER_RETRY -> {
+                    // Cold-start Render.com (503) ou erreur temporaire : on réessaie.
+                    delay(registerRetryDelay(attempt))
+                    doRegister(s, attempt + 1)
+                }
+                else -> handleAuthError(r.error, RetryAction.SubmitForm)
+            }
+        }
+    }
+
+    private fun registerRetryDelay(attempt: Int): Long = when (attempt) {
+        0 -> 8_000L
+        else -> 20_000L
     }
 
     /* ---------- Google + mot de passe oublié ---------- */
@@ -249,17 +260,17 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             when (val r = repository.forgotPassword(email)) {
                 is NetworkResult.Success -> onDone(null)
-                is NetworkResult.Failure -> onDone(r.error.debugDetail)
+                is NetworkResult.Failure -> onDone(r.error.displayMessage())
             }
         }
     }
 
-    /** Réinitialise le mot de passe avec le token reçu par email. */
-    fun resetPassword(token: String, newPassword: String, onDone: (error: String?) -> Unit) {
+    /** Réinitialise le mot de passe avec le code OTP reçu par email. */
+    fun resetPassword(email: String, otpCode: String, newPassword: String, onDone: (error: String?) -> Unit) {
         viewModelScope.launch {
-            when (val r = repository.resetPassword(token, newPassword)) {
+            when (val r = repository.resetPassword(email, otpCode, newPassword)) {
                 is NetworkResult.Success -> onDone(null)
-                is NetworkResult.Failure -> onDone(r.error.debugDetail)
+                is NetworkResult.Failure -> onDone(r.error.displayMessage())
             }
         }
     }
@@ -285,7 +296,7 @@ class AuthViewModel @Inject constructor(
                     startCountdown()
                 }
                 is NetworkResult.Failure ->
-                    _state.update { it.copy(isLoading = false, networkError = r.error.debugDetail) }
+                    _state.update { it.copy(isLoading = false, networkError = r.error.displayMessage()) }
             }
         }
     }
@@ -347,8 +358,7 @@ class AuthViewModel @Inject constructor(
         _state.update {
             it.copy(
                 isLoading = false,
-                // Détail technique complet (statut HTTP + message backend) pour diagnostiquer vite.
-                networkError = err.debugDetail,
+                networkError = err.displayMessage(),
                 retryAction = if (err.isRetryable()) retry else null
             )
         }
@@ -381,15 +391,25 @@ class AuthViewModel @Inject constructor(
         countdownJob?.cancel()
         super.onCleared()
     }
+
+    companion object {
+        private const val MAX_REGISTER_RETRY = 2
+    }
 }
 
 private fun ApiError.isRetryable(): Boolean =
     this is ApiError.Network || this is ApiError.Timeout || this is ApiError.Server
 
+/** En debug : détail technique complet. En release : message utilisateur uniquement. */
+private fun ApiError.displayMessage(): String =
+    if (BuildConfig.DEBUG) debugDetail else userMessage
+
 /**
  * À l'inscription, indique qu'un identifiant est probablement déjà pris :
  *  - 409 Conflict (cas propre, email/pseudo déjà utilisé) ;
- *  - 5xx : bug backend connu — un doublon de `phone_number` renvoie un 500 au lieu d'un 409.
+ *  - 500 : bug backend connu — un doublon de `phone_number` renvoie un 500 au lieu d'un 409.
+ * NB : 503 (cold-start Render) est exclu — c'est une erreur temporaire, pas un conflit.
  */
 private fun ApiError.isLikelyDuplicate(): Boolean =
-    (this is ApiError.Business && httpStatus == 409) || this is ApiError.Server
+    (this is ApiError.Business && httpStatus == 409) ||
+    (this is ApiError.Server && httpStatus == 500)
