@@ -1,11 +1,14 @@
 package com.unovapp.android.data.user
 
+import com.unovapp.android.data.auth.MessageResponse
+import com.unovapp.android.data.video.FeedResponse
 import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -54,4 +57,54 @@ interface UserApi {
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 20
     ): PagedResponse<UserSummaryDto>
+
+    /** Obtient une URL pré-signée S3 pour uploader un avatar. */
+    @POST("users/me/avatar/presign")
+    suspend fun avatarPresign(@Body body: AvatarPresignRequest): AvatarPresignResponse
+
+    /** Confirme que l'avatar a bien été uploadé sur S3 — met à jour avatar_url dans le profil. */
+    @PUT("users/me/avatar")
+    suspend fun avatarConfirm(@Body body: AvatarConfirmRequest): UserProfileDto
+
+    /* ---------- Sprint 1/2/3 ---------- */
+
+    /** Vidéos d'un utilisateur (`:id` = UUID ou `me`). Auth optionnelle → format feed. */
+    @GET("users/{id}/videos")
+    suspend fun userVideos(
+        @Path("id") id: String,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int = 12
+    ): FeedResponse
+
+    /** Vidéos aimées par l'utilisateur connecté (me uniquement). */
+    @GET("users/me/liked")
+    suspend fun likedVideos(@Query("cursor") cursor: String? = null, @Query("limit") limit: Int = 12): FeedResponse
+
+    /** Vidéos sauvegardées par l'utilisateur connecté (me uniquement). */
+    @GET("users/me/saved")
+    suspend fun savedVideos(@Query("cursor") cursor: String? = null, @Query("limit") limit: Int = 12): FeedResponse
+
+    /** Disponibilité d'un pseudo (temps réel pendant inscription / changement). */
+    @GET("users/check")
+    suspend fun checkUsername(@Query("username") username: String): AvailabilityResponse
+
+    /** Définit les centres d'intérêt (remplace l'existant). */
+    @POST("users/me/interests")
+    suspend fun setInterests(@Body body: InterestsRequest): InterestsResponse
+
+    /** Récupère les centres d'intérêt. */
+    @GET("users/me/interests")
+    suspend fun getInterests(): InterestsResponse
+
+    /** Bloquer un utilisateur (rompt le follow dans les deux sens). */
+    @POST("users/{id}/block")
+    suspend fun blockUser(@Path("id") id: String): MessageResponse
+
+    /** Débloquer un utilisateur. */
+    @DELETE("users/{id}/block")
+    suspend fun unblockUser(@Path("id") id: String): MessageResponse
+
+    /** Suppression de compte RGPD (soft delete + anonymisation). Réponse 204. Irréversible. */
+    @DELETE("users/me")
+    suspend fun deleteMe()
 }

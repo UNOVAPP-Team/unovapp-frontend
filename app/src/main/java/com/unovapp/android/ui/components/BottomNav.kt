@@ -87,7 +87,6 @@ fun BottomNav(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF050505))
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 12.dp)
     ) {
@@ -157,7 +156,7 @@ private fun NavPill(
             imageVector = tab.icon,
             contentDescription = label,
             tint = tint,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(24.dp)
         )
         if (isActive) {
             Text(
@@ -218,8 +217,8 @@ private fun CreateButton(onClick: () -> Unit) {
         )
         Box(
             modifier = Modifier
-                .size(width = 48.dp, height = 36.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .size(width = 52.dp, height = 40.dp)
+                .clip(RoundedCornerShape(12.dp))
                 .background(UnovGradients.Gold)
                 .unovTap(onClick = onClick, pressedScale = 0.90f),
             contentAlignment = Alignment.Center
@@ -228,7 +227,7 @@ private fun CreateButton(onClick: () -> Unit) {
                 imageVector = Icons.Filled.Add,
                 contentDescription = stringResource(R.string.nav_create),
                 tint = Color(0xFF0D0D0D),
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
     }

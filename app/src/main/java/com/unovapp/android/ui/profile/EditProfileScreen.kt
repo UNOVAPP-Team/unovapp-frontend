@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,15 +45,21 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
+import androidx.compose.runtime.LaunchedEffect
 import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.enterFadeSlide
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
 
 /**
  * Écran d'édition du profil. Les champs texte (display_name, username, bio) sont enregistrés
- * via PATCH /users/{id}. L'upload de photo (avatar/couverture) est désactivé tant que le
- * stockage S3 n'est pas configuré côté backend.
+ * via PATCH /users/{id}. L'avatar est uploadé via le flux S3 presign/confirm
+ * (POST /users/me/avatar/presign → PUT S3 → PUT /users/me/avatar).
  */
 @Composable
 fun EditProfileScreen(
@@ -62,9 +69,21 @@ fun EditProfileScreen(
     avatarUrl: String?,
     saving: Boolean,
     error: String?,
+    avatarUploading: Boolean = false,
+    avatarError: String? = null,
+    onAvatarSelected: (contentType: String, uri: Uri) -> Unit = { _, _ -> },
     onSave: (displayName: String, username: String, bio: String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    // Sélecteur d'image restreint aux formats acceptés par le backend (JPEG/PNG/WebP).
+    val pickAvatar = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val contentType = context.contentResolver.getType(uri) ?: "image/jpeg"
+            onAvatarSelected(contentType, uri)
+        }
+    }
+    val openAvatarPicker = { pickAvatar.launch(arrayOf("image/jpeg", "image/png", "image/webp")) }
     var displayName by remember { mutableStateOf(initialDisplayName) }
     var username by remember { mutableStateOf(initialUsername.filter { it != '@' }) }
     var bio by remember { mutableStateOf(initialBio) }
@@ -72,10 +91,16 @@ fun EditProfileScreen(
     val usernameValid = username.length in 3..20
     val canSave = !saving && usernameValid
 
+    // Déclenche la cascade d'entrée (fade + slide) de chaque élément à l'ouverture.
+    var appeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appeared = true }
+
+    BackHandler { onDismiss() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050505))
+            .background(Color(0xFF0D0D0D))
             .windowInsetsPadding(WindowInsets.systemBars)
             .verticalScroll(rememberScrollState())
     ) {
@@ -122,13 +147,25 @@ fun EditProfileScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Avatar (photo) — upload bientôt disponible
+        // Avatar (photo de profil) — tap pour choisir une image → upload S3.
         Box(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .enterFadeSlide(appeared, delayMillis = 60)
+                .padding(vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(contentAlignment = Alignment.BottomEnd) {
+                // Pas de clip circulaire ici : sinon le badge appareil-photo (en bas-droite,
+                // sur le bord du cercle) est rogné. Le conteneur enveloppe l'avatar + le badge.
+                Box(
+                    contentAlignment = Alignment.BottomEnd,
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = !avatarUploading
+                    ) { openAvatarPicker() }
+                ) {
                     Box(
                         modifier = Modifier.size(92.dp).clip(CircleShape).background(Color(0xFF141414)),
                         contentAlignment = Alignment.Center
@@ -143,23 +180,46 @@ fun EditProfileScreen(
                         } else {
                             Avatar(idx = 0, name = displayName.ifBlank { username }, size = 92.dp)
                         }
+                        // Overlay de progression pendant l'upload.
+                        if (avatarUploading) {
+                            Box(
+                                modifier = Modifier.size(92.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = UnovColors.Accent,
+                                    strokeWidth = 2.5.dp,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
                     }
+                    // Halo sombre (découpe nette) + pastille dorée + icône → badge net et visible.
                     Box(
-                        modifier = Modifier.size(30.dp).clip(CircleShape).background(UnovGradients.Gold),
+                        modifier = Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF141414)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.PhotoCamera,
-                            contentDescription = null,
-                            tint = Color(0xFF0D0D0D),
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Box(
+                            modifier = Modifier.size(27.dp).clip(CircleShape).background(UnovGradients.Gold),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.PhotoCamera,
+                                contentDescription = "Changer la photo de profil",
+                                tint = Color(0xFF0D0D0D),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Photo de profil et couverture : bientôt",
-                    color = UnovColors.TextMute,
+                    text = when {
+                        avatarUploading -> "Envoi de la photo…"
+                        avatarError != null -> avatarError
+                        else -> "Touche la photo pour la changer"
+                    },
+                    color = if (avatarError != null && !avatarUploading) UnovColors.Danger else UnovColors.TextMute,
                     fontSize = 11.sp
                 )
             }
@@ -171,19 +231,26 @@ fun EditProfileScreen(
             modifier = Modifier.padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            EditField(label = "NOM AFFICHÉ", value = displayName, onValueChange = { displayName = it.take(40) })
+            EditField(
+                label = "NOM AFFICHÉ",
+                value = displayName,
+                onValueChange = { displayName = it.take(40) },
+                modifier = Modifier.fillMaxWidth().enterFadeSlide(appeared, delayMillis = 140)
+            )
             EditField(
                 label = "PSEUDO",
                 value = username,
                 onValueChange = { username = it.filter { c -> c.isLetterOrDigit() || c == '_' || c == '.' }.take(20) },
-                helper = if (username.isNotEmpty() && !usernameValid) "Entre 3 et 20 caractères" else "@$username"
+                helper = if (username.isNotEmpty() && !usernameValid) "Entre 3 et 20 caractères" else "@$username",
+                modifier = Modifier.fillMaxWidth().enterFadeSlide(appeared, delayMillis = 210)
             )
             EditField(
                 label = "BIO",
                 value = bio,
                 onValueChange = { bio = it.take(160) },
                 singleLine = false,
-                helper = "${bio.length}/160"
+                helper = "${bio.length}/160",
+                modifier = Modifier.fillMaxWidth().enterFadeSlide(appeared, delayMillis = 280)
             )
 
             if (error != null) {
@@ -201,9 +268,10 @@ private fun EditField(
     value: String,
     onValueChange: (String) -> Unit,
     singleLine: Boolean = true,
-    helper: String? = null
+    helper: String? = null,
+    modifier: Modifier = Modifier
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = label,
             color = UnovColors.TextMute,

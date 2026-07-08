@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.BarChart
@@ -39,6 +40,7 @@ import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Interests
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Lock
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -91,11 +94,15 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var langPickerOpen by remember { mutableStateOf(false) }
+    // Sous-écran de compte ouvert : "sessions" | "email" | "delete".
+    var accountSub by remember { mutableStateOf<String?>(null) }
+
+    BackHandler { onClose() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF050505))
+            .background(Color(0xFF0D0D0D))
             .windowInsetsPadding(WindowInsets.systemBars)
             .verticalScroll(rememberScrollState())
     ) {
@@ -121,6 +128,7 @@ fun SettingsScreen(
         // ----- Compte -----
         SettingsGroup("Compte") {
             SettingRow(Icons.Outlined.Edit, "Modifier le profil", onClick = onEditProfile)
+            SettingRow(Icons.Outlined.AlternateEmail, "Changer d'email", onClick = { accountSub = "email" })
             SettingRow(
                 Icons.Outlined.AccountBalanceWallet,
                 "Portefeuille & Mobile Money",
@@ -146,12 +154,13 @@ fun SettingsScreen(
             SettingRow(Icons.Outlined.Lock, "Compte privé", soon = true)
             SettingRow(Icons.Outlined.Forum, "Commentaires, cadeaux, duos", soon = true)
             SettingRow(Icons.Outlined.Block, "Comptes bloqués", soon = true)
-            SettingRow(Icons.Outlined.Devices, "Appareils connectés", soon = true)
+            SettingRow(Icons.Outlined.Devices, "Appareils connectés", subtitle = "Sessions actives", onClick = { accountSub = "sessions" })
         }
 
         // ----- Préférences -----
         SettingsGroup("Préférences") {
             SettingRow(Icons.Outlined.Language, "Langue de l'app", onClick = { langPickerOpen = true })
+            SettingRow(Icons.Outlined.Interests, "Centres d'intérêt", subtitle = "Personnalise ton feed", onClick = { accountSub = "interests" })
             SettingRow(Icons.Outlined.DataUsage, "Économiseur de données", subtitle = "Optimisé 2G/3G", soon = true)
             SettingRow(Icons.Outlined.Notifications, "Notifications", soon = true)
             SettingRow(Icons.Outlined.DarkMode, "Thème", subtitle = "Sombre", soon = true)
@@ -167,7 +176,7 @@ fun SettingsScreen(
                 Icons.Outlined.DeleteOutline,
                 "Supprimer mon compte",
                 danger = true,
-                onClick = { openUrl(context, URL_ACCOUNT_DELETION) }
+                onClick = { accountSub = "delete" }
             )
         }
 
@@ -215,6 +224,17 @@ fun SettingsScreen(
 
     if (langPickerOpen) {
         LanguagePickerSheet(onDismiss = { langPickerOpen = false })
+    }
+
+    // Sous-écrans de compte (overlays plein écran, câblés au backend).
+    when (accountSub) {
+        "sessions" -> com.unovapp.android.ui.account.SessionsScreen(onBack = { accountSub = null })
+        "email" -> com.unovapp.android.ui.account.ChangeEmailScreen(onBack = { accountSub = null })
+        "delete" -> com.unovapp.android.ui.account.DeleteAccountScreen(
+            onBack = { accountSub = null },
+            onDeleted = { accountSub = null; onLogout() }
+        )
+        "interests" -> com.unovapp.android.ui.interests.InterestsScreen(onDone = { accountSub = null })
     }
 }
 

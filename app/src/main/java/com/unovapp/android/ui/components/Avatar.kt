@@ -16,14 +16,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Famille orange — nuances distinctes par utilisateur (déterministe via idx),
+// toutes dans l'identité noir + orange de l'app.
 private val AvatarPalette = listOf(
-    listOf(Color(0xFF7B2D5C), Color(0xFFC9527A)),
-    listOf(Color(0xFFE5722D), Color(0xFFFFB46B)),
-    listOf(Color(0xFF1A4D8C), Color(0xFF4FA2D4)),
-    listOf(Color(0xFFC9A227), Color(0xFFEFD86E)),
-    listOf(Color(0xFF3D2D5C), Color(0xFF7A5DB0)),
-    listOf(Color(0xFF8C2D4D), Color(0xFFD45A8B)),
-    listOf(Color(0xFF2D5C3D), Color(0xFF5DAE7A))
+    listOf(Color(0xFFFF6A00), Color(0xFFFF944D)),  // orange vif
+    listOf(Color(0xFFE5722D), Color(0xFFFFC08A)),  // orange chaud
+    listOf(Color(0xFFE55F00), Color(0xFFFF944D)),  // brûlé
+    listOf(Color(0xFFFF944D), Color(0xFFFFD2A6)),  // ambre clair
+    listOf(Color(0xFFE55F00), Color(0xFFE55F00)),  // profond
+    listOf(Color(0xFFFF6A00), Color(0xFFFF944D)),  // vif
+    listOf(Color(0xFFB85C2D), Color(0xFFFFC08A))   // terracotta
 )
 
 /**

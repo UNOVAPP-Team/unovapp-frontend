@@ -89,7 +89,7 @@ fun Modifier.unovTap(
 fun Modifier.shimmer(
     enabled: Boolean = true,
     base: Color = Color(0xFF1A1A1A),
-    highlight: Color = Color(0xFF2F2A1A)  // teinte or très atténuée
+    highlight: Color = Color(0xFF2A1A0A)  // teinte orange très atténuée
 ): Modifier = composed {
     if (!enabled) return@composed this.background(base)
     val transition = rememberInfiniteTransition(label = "shimmer")
