@@ -58,7 +58,10 @@ import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Mail
 import androidx.compose.material.icons.outlined.MonetizationOn
+import androidx.compose.material.icons.outlined.PersonAddAlt
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.outlined.Visibility
@@ -67,6 +70,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -87,6 +91,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
+import com.unovapp.android.ui.challenge.ChallengeSection
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.EmptyState
 import com.unovapp.android.ui.components.ParticleBurst
@@ -123,6 +128,8 @@ data class ProfileUiState(
     val bio: String = "",
     val website: String = "",
     val avatarUrl: String? = null,
+    /** Photo de couverture (bannière) — null tant que le créateur n'en a pas choisi. */
+    val coverUrl: String? = null,
     val followersFmt: String = "0",
     val likesFmt: String = "0",
     val videosFmt: String = "0",
@@ -130,6 +137,9 @@ data class ProfileUiState(
     val followersCount: Int = 0,
     val likesCount: Int = 0,
     val videosCount: Int = 0,
+    /** Abonnements (following) — 1ʳᵉ stat de la maquette. */
+    val followingCount: Int = 0,
+    val followingFmt: String = "0",
     val followersTrend: String = "",
     val videosTrend: String = "",
     val followersSpark: List<Float> = emptyList(),
@@ -210,6 +220,7 @@ fun ProfileScreen(
         val followingDelta by viewModel.followingDelta.collectAsStateWithLifecycle()
         val likesReceivedDelta by viewModel.likesReceivedDelta.collectAsStateWithLifecycle()
         val avatarState by viewModel.avatarState.collectAsStateWithLifecycle()
+        val coverState by viewModel.coverState.collectAsStateWithLifecycle()
         val videosState by viewModel.videos.collectAsStateWithLifecycle()
 
         // Session expirée/invalide (401) → on renvoie vers la connexion.
@@ -230,6 +241,10 @@ fun ProfileScreen(
         var filter by remember { mutableStateOf("Récents") }
         var langPickerOpen by remember { mutableStateOf(false) }
         var editOpen by remember { mutableStateOf(false) }
+        // Challenges : écran de création + liste locale (pas encore d'API — cf.
+        // docs/BACKEND_CHALLENGES.md). Les challenges créés restent visibles dans la session.
+        var createChallengeOpen by remember { mutableStateOf(false) }
+        var myChallenges by remember { mutableStateOf(listOf<com.unovapp.android.ui.challenge.ChallengeCard>()) }
         var settingsOpen by remember { mutableStateOf(false) }
         var photoSheetOpen by remember { mutableStateOf(false) }
         var photoViewerOpen by remember { mutableStateOf(false) }
@@ -239,6 +254,20 @@ fun ProfileScreen(
             if (uri != null) {
                 val ct = context.contentResolver.getType(uri) ?: "image/jpeg"
                 viewModel.uploadAvatar(ct, uri)
+            }
+        }
+        // Sélecteur de photo de couverture (mêmes formats acceptés par le backend).
+        val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                val ct = context.contentResolver.getType(uri) ?: "image/jpeg"
+                viewModel.uploadCover(ct, uri)
+            }
+        }
+        // Erreur d'upload de couverture → message clair, puis on efface l'erreur.
+        LaunchedEffect(coverState.error) {
+            coverState.error?.let { msg ->
+                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                viewModel.clearCoverError()
             }
         }
         val scrollState = rememberScrollState()
@@ -263,7 +292,11 @@ fun ProfileScreen(
                 state = state,
                 scrollPx = scrollState.value,
                 onOpenLangPicker = { langPickerOpen = true },
-                onOpenSettings = { settingsOpen = true }
+                onOpenSettings = { settingsOpen = true },
+                coverUploading = coverState.isUploading,
+                onChangeCover = {
+                    coverPicker.launch(arrayOf("image/jpeg", "image/png", "image/webp"))
+                }
             )
             IdentityBlock(
                 state = state,
@@ -334,22 +367,37 @@ fun ProfileScreen(
                         videosCount = state.videosFmt,
                         onTabChange = { tab = it; viewModel.selectTab(it) }
                     )
-                    val gridVideos = videosState.current
-                    when {
-                        videosState.loading && gridVideos.isEmpty() ->
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 28.dp),
-                                contentAlignment = Alignment.Center
-                            ) { androidx.compose.material3.CircularProgressIndicator(color = UnovColors.Accent, strokeWidth = 2.dp) }
-                        gridVideos.isEmpty() -> {
-                            val (t, s) = when (tab) {
-                                ProfileVideoTab.Videos -> "Aucune vidéo pour l'instant" to "Tes vidéos publiées apparaîtront ici."
-                                ProfileVideoTab.Liked -> "Aucune vidéo aimée" to "Les vidéos que tu aimes apparaîtront ici."
-                                ProfileVideoTab.Saved -> "Aucune vidéo sauvegardée" to "Enregistre des vidéos pour les retrouver ici."
+                    when (tab) {
+                        // Onglet Challenges : carte CTA + carrousel « Mes challenges ».
+                        ProfileVideoTab.Challenges -> ChallengeSection(
+                            challenges = myChallenges,
+                            onCreate = { createChallengeOpen = true }
+                        )
+                        // Playlists : pas encore d'API backend → état vide honnête.
+                        ProfileVideoTab.Playlists -> EmptyState(
+                            title = "Aucune playlist",
+                            subtitle = "Regroupe tes vidéos en playlists — bientôt disponible.",
+                            modifier = Modifier.padding(top = 28.dp, bottom = 16.dp)
+                        )
+                        // Vidéos / Favoris : grille 3 colonnes.
+                        else -> {
+                            val gridVideos = videosState.current
+                            when {
+                                videosState.loading && gridVideos.isEmpty() ->
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 28.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) { androidx.compose.material3.CircularProgressIndicator(color = UnovColors.Accent, strokeWidth = 2.dp) }
+                                gridVideos.isEmpty() -> {
+                                    val (t, s) = when (tab) {
+                                        ProfileVideoTab.Videos -> "Aucune vidéo pour l'instant" to "Tes vidéos publiées apparaîtront ici."
+                                        else -> "Aucun favori" to "Enregistre des vidéos pour les retrouver ici."
+                                    }
+                                    EmptyState(title = t, subtitle = s, modifier = Modifier.padding(top = 28.dp, bottom = 16.dp))
+                                }
+                                else -> RealVideoGrid(videos = gridVideos, onTap = { index -> detailPlaying = gridVideos to index })
                             }
-                            EmptyState(title = t, subtitle = s, modifier = Modifier.padding(top = 28.dp, bottom = 16.dp))
                         }
-                        else -> RealVideoGrid(videos = gridVideos, onTap = { index -> detailPlaying = gridVideos to index })
                     }
                 }
             }
@@ -413,7 +461,7 @@ fun ProfileScreen(
             )
         }
 
-        // Lecture plein écran d'une vidéo de la grille (mes vidéos / aimées / sauvegardées).
+        // Lecture plein écran d'une vidéo de la grille (mes vidéos / favoris).
         detailPlaying?.let { (list, index) ->
             com.unovapp.android.ui.feed.VideoDetailScreen(
                 videos = list,
@@ -421,6 +469,41 @@ fun ProfileScreen(
                 onBack = { detailPlaying = null },
                 onOpenWallet = onOpenWallet
             )
+        }
+
+        // Écran « Créer un challenge ». Rendu dans un Dialog plein écran : la BottomNav de
+        // MainScreen flotte au-dessus du contenu (architecture Box), elle masquerait sinon
+        // le bouton « Lancer le challenge ». Le Dialog crée sa propre fenêtre, au-dessus de tout.
+        if (createChallengeOpen) {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { createChallengeOpen = false },
+                properties = androidx.compose.ui.window.DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    dismissOnBackPress = true
+                )
+            ) {
+            com.unovapp.android.ui.challenge.CreateChallengeScreen(
+                onBack = { createChallengeOpen = false },
+                onLaunch = { form ->
+                    // Pas d'endpoint backend : le challenge est ajouté localement pour la
+                    // session et l'utilisateur est prévenu honnêtement.
+                    myChallenges = myChallenges + com.unovapp.android.ui.challenge.ChallengeCard(
+                        id = System.currentTimeMillis().toString(),
+                        hashtag = "#" + form.name.trim().replace(" ", ""),
+                        participantsFmt = "0",
+                        coverUrl = form.coverUri,
+                        isActive = true
+                    )
+                    createChallengeOpen = false
+                    android.widget.Toast.makeText(
+                        ctx,
+                        "Challenge créé (local) — la publication arrivera avec l'API backend.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+            )
+            }
         }
     }
 }
@@ -476,6 +559,7 @@ private fun mergeRealProfile(
         bio = p.bio?.takeIf { it.isNotBlank() } ?: base.bio,
         website = p.websiteUrl ?: "",
         avatarUrl = p.avatarUrl,
+        coverUrl = p.coverUrl,
         followersFmt = formatCompact(p.followersCount),
         // Stats réelles (Sprint 3) : vraies vidéos publiées + total de likes reçus (+ delta local
         // si je viens de liker une de mes vidéos → mise à jour immédiate).
@@ -484,6 +568,9 @@ private fun mergeRealProfile(
         followersCount = p.followersCount,
         likesCount = (p.totalLikesReceived + likesReceivedDelta).coerceAtLeast(0),
         videosCount = p.videosCount,
+        // Abonnements = following du backend + delta local (suivis/désuivis dans la session).
+        followingCount = (p.followingCount + followingDelta).coerceAtLeast(0),
+        followingFmt = formatCompact((p.followingCount + followingDelta).coerceAtLeast(0)),
         revenueFcfaFmt = formatThousands(p.walletBalance)
     )
 }
@@ -531,12 +618,28 @@ private fun CoverHeader(
     state: ProfileUiState,
     scrollPx: Int = 0,
     onOpenLangPicker: () -> Unit = {},
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    coverUploading: Boolean = false,
+    onChangeCover: () -> Unit = {}
 ) {
+    // Révélation de la photo de couverture : quand l'URL arrive (ou change après un upload),
+    // l'image se dévoile en fondu + léger dézoom — elle « se pose » au lieu d'apparaître sec.
+    val reveal = remember(state.coverUrl) { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(state.coverUrl) {
+        if (!state.coverUrl.isNullOrBlank()) reveal.animateTo(1f, tween(700, easing = UnovMotion.Standard))
+    }
+    // Salve d'étincelles à la confirmation d'une nouvelle couverture.
+    var coverBurst by remember { mutableIntStateOf(0) }
+    var firstCover by remember { mutableStateOf(true) }
+    LaunchedEffect(state.coverUrl) {
+        if (firstCover) { firstCover = false; return@LaunchedEffect }
+        if (!state.coverUrl.isNullOrBlank()) coverBurst++
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(170.dp)
+            .height(190.dp)
             .graphicsLayer {
                 // Parallax : le cover suit le scroll à demi-vitesse + léger zoom + fondu élégant.
                 translationY = scrollPx * 0.5f
@@ -546,7 +649,8 @@ private fun CoverHeader(
                 alpha = (1f - scrollPx / 520f).coerceIn(0.25f, 1f)
             }
     ) {
-        // Base gradient cinema
+        // Base gradient cinema — visible tant qu'aucune couverture n'est définie, et derrière
+        // l'image pendant son chargement.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -560,7 +664,41 @@ private fun CoverHeader(
                     )
                 )
         )
-        // Decorative filigree
+
+        // Photo de couverture réelle (R2) — révélation en fondu + dézoom (effet « Ken Burns »
+        // inversé : l'image se pose), puis parallax de zoom au scroll par-dessus.
+        if (!state.coverUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = state.coverUrl,
+                contentDescription = "Photo de couverture",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = reveal.value
+                        val s = 1.12f - 0.12f * reveal.value
+                        scaleX = s
+                        scaleY = s
+                    }
+            )
+            // Voile sombre : garantit la lisibilité des contrôles et du bloc identité par-dessus,
+            // quelle que soit la photo choisie (claire, chargée, contrastée…).
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.45f),
+                            0.45f to Color.Black.copy(alpha = 0.15f),
+                            1f to Color.Black.copy(alpha = 0.60f)
+                        )
+                    )
+            )
+        }
+        // Décor animé — UNIQUEMENT quand il n'y a pas de photo : sinon il salirait la couverture
+        // du créateur. Sans photo, le header reste vivant (filigrane + aurora qui dérive).
+        val hasCover = !state.coverUrl.isNullOrBlank()
+        if (!hasCover) {
         Filigree(modifier = Modifier.fillMaxSize())
         // Aurora vivante : deux nappes lumineuses qui dérivent lentement en boucle ambient —
         // le cover « respire » au lieu d'être une image figée. Canvas pur, coût négligeable.
@@ -597,6 +735,7 @@ private fun CoverHeader(
                 center = Offset(w * (0.85f - 0.55f * auroraT), h * (0.75f - 0.25f * auroraT))
             )
         }
+        }
         // Bottom gold rule (light divider)
         Box(
             modifier = Modifier
@@ -610,6 +749,85 @@ private fun CoverHeader(
                         1f to Color.Transparent
                     )
                 )
+        )
+
+        // ── Bouton « changer la couverture » (bas-droite) + états d'upload ──────────
+        // Pastille sombre discrète : elle n'écrase pas la photo mais reste trouvable.
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 14.dp, bottom = 14.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(Color.Black.copy(alpha = 0.55f))
+                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(999.dp))
+                .unovTap(onClick = onChangeCover, pressedScale = 0.92f)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (coverUploading) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = UnovColors.Accent,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(13.dp)
+                )
+                Text("Envoi…", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.PhotoCamera,
+                    contentDescription = "Changer la photo de couverture",
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = if (hasCover) "Modifier" else "Ajouter une couverture",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        // Balayage lumineux pendant l'envoi : une bande claire traverse le header en boucle —
+        // l'utilisateur voit que « ça travaille » sans bloquer l'écran.
+        if (coverUploading) {
+            val sweep by rememberInfiniteTransition(label = "coverSweep").animateFloat(
+                initialValue = -0.4f,
+                targetValue = 1.4f,
+                animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Restart),
+                label = "coverSweepV"
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.35f))
+            )
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                val bandWidth = size.width * 0.35f
+                val x = size.width * sweep
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.16f),
+                            Color.Transparent
+                        ),
+                        startX = x - bandWidth / 2f,
+                        endX = x + bandWidth / 2f
+                    ),
+                    topLeft = Offset(x - bandWidth / 2f, 0f),
+                    size = androidx.compose.ui.geometry.Size(bandWidth, size.height)
+                )
+            }
+        }
+
+        // Explosion d'étincelles à la confirmation d'une nouvelle couverture (récompense).
+        ParticleBurst(
+            trigger = coverBurst,
+            particleCount = 34,
+            maxRadius = 150.dp,
+            durationMs = 900,
+            modifier = Modifier.fillMaxSize()
         )
 
         // Top controls
@@ -713,14 +931,14 @@ private fun IdentityBlock(
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        // Avatar (overlaps cover) + stats
+        // ── Avatar à gauche + identité à droite (disposition maquette) ──────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset(y = (-38).dp)
                 .enterFadeSlide(appeared, delayMillis = 40),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             ProfileAvatar(
                 name = state.displayName,
@@ -728,69 +946,45 @@ private fun IdentityBlock(
                 uploading = avatarUploading,
                 onClick = onAvatarClick
             )
-            StatsTrio(state = state, onOpenFollowers = onOpenFollowers, onOpenFollowing = onOpenFollowing)
-        }
-
-        // Name + verified + tier
-        Column(modifier = Modifier.offset(y = (-24).dp).enterFadeSlide(appeared, delayMillis = 130)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = state.displayName,
-                    color = UnovColors.Text,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.4).sp
-                )
-                if (state.isVerified) {
-                    Icon(
-                        imageVector = Icons.Filled.Verified,
-                        contentDescription = "Compte vérifié",
-                        tint = UnovColors.Accent,
-                        modifier = Modifier.size(18.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "@${state.username}",
+                        color = UnovColors.Text,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.4).sp,
+                        maxLines = 1
                     )
-                }
-            }
-
-            Row(
-                modifier = Modifier.padding(top = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "@${state.username}",
-                    color = UnovColors.TextMute,
-                    fontSize = 12.sp
-                )
-                if (state.city.isNotBlank()) {
-                    Dot()
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
+                    if (state.isVerified) {
                         Icon(
-                            imageVector = Icons.Filled.Place,
-                            contentDescription = null,
-                            tint = UnovColors.TextMute,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Text(
-                            text = state.city,
-                            color = UnovColors.TextMute,
-                            fontSize = 12.sp
+                            imageVector = Icons.Filled.Verified,
+                            contentDescription = "Compte vérifié",
+                            tint = UnovColors.Accent,
+                            modifier = Modifier.size(17.dp)
                         )
                     }
                 }
-                Dot()
                 Text(
-                    text = state.tier,
-                    color = UnovColors.Accent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
+                    text = state.displayName,
+                    color = UnovColors.TextMute,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
+        }
+
+        // ── Stats : Abonnements · Abonnés · J'aime ─────────────────────────────
+        Column(modifier = Modifier.offset(y = (-24).dp).enterFadeSlide(appeared, delayMillis = 130)) {
+            StatsTrio(
+                state = state,
+                onOpenFollowers = onOpenFollowers,
+                onOpenFollowing = onOpenFollowing
+            )
 
             if (state.bio.isNotBlank()) {
                 Text(
@@ -798,7 +992,7 @@ private fun IdentityBlock(
                     color = UnovColors.TextDim,
                     fontSize = 13.sp,
                     lineHeight = 20.sp,
-                    modifier = Modifier.padding(top = 12.dp)
+                    modifier = Modifier.padding(top = 14.dp)
                 )
             }
 
@@ -824,41 +1018,41 @@ private fun IdentityBlock(
                 }
             }
 
-            // Action bar — profil personnel : Modifier le profil + Partager.
+            // Action bar (maquette) : « Modifier le profil » large + bouton icône compact.
             Row(
-                modifier = Modifier.padding(top = 18.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier.padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(46.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(UnovGradients.Gold)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, UnovColors.LineStrong, RoundedCornerShape(12.dp))
                         .clickable(onClick = onEditProfile),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Modifier le profil",
-                        color = Color(0xFF0D0D0D),
+                        color = UnovColors.Text,
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(46.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .border(1.dp, UnovColors.LineStrong, RoundedCornerShape(14.dp))
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, UnovColors.LineStrong, RoundedCornerShape(12.dp))
                         .clickable(onClick = onOpenWallet),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Partager",
-                        color = UnovColors.Text,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
+                    Icon(
+                        imageVector = Icons.Outlined.PersonAddAlt,
+                        contentDescription = "Trouver des amis",
+                        tint = UnovColors.Text,
+                        modifier = Modifier.size(19.dp)
                     )
                 }
             }
@@ -1029,13 +1223,25 @@ private fun StatsTrio(
             .padding(bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Ordre de la maquette : Abonnements · Abonnés · J'aime
+        StatTile(
+            value = state.followingFmt,
+            rawValue = state.followingCount,
+            label = "Abonnements",
+            trend = null,
+            sparkValues = null,
+            popIndex = 0,
+            onClick = onOpenFollowing,
+            modifier = Modifier.weight(1f)
+        )
+        StatDivider()
         StatTile(
             value = state.followersFmt,
             rawValue = state.followersCount,
             label = "Abonnés",
             trend = null,
             sparkValues = null,
-            popIndex = 0,
+            popIndex = 1,
             onClick = onOpenFollowers,
             modifier = Modifier.weight(1f)
         )
@@ -1044,16 +1250,6 @@ private fun StatsTrio(
             value = state.likesFmt,
             rawValue = state.likesCount,
             label = "J'aime",
-            trend = null,
-            sparkValues = null,
-            popIndex = 1,
-            modifier = Modifier.weight(1f)
-        )
-        StatDivider()
-        StatTile(
-            value = state.videosFmt,
-            rawValue = state.videosCount,
-            label = "Vidéos",
             trend = null,
             sparkValues = null,
             popIndex = 2,
@@ -1109,7 +1305,8 @@ private fun StatTile(
                 scaleY = s
                 alpha = pop.value.coerceIn(0f, 1f)
             }
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box {
             // Compteur animé : défile de l'ancienne valeur vers la nouvelle (count-up).
@@ -1130,35 +1327,26 @@ private fun StatTile(
                 modifier = Modifier.matchParentSize()
             )
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(
-                    text = label.uppercase(),
-                    color = UnovColors.TextMute,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.6.sp,
-                    maxLines = 1
-                )
-                if (trend != null) {
-                    Text(
-                        text = "↗ $trend",
-                        color = UnovColors.Accent,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 3.dp)
-                    )
-                }
-            }
-            if (sparkValues != null) {
-                Sparkline(values = sparkValues, width = 44.dp, height = 16.dp)
-            }
+        // Libellé sous la valeur, centré (maquette).
+        Text(
+            text = label,
+            color = UnovColors.TextMute,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        if (trend != null) {
+            Text(
+                text = "↗ $trend",
+                color = UnovColors.Accent,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 3.dp)
+            )
+        }
+        if (sparkValues != null) {
+            Sparkline(values = sparkValues, width = 44.dp, height = 16.dp)
         }
     }
 }
@@ -1727,86 +1915,82 @@ private fun BattleRow(b: BattleEntry) {
 /** Métadonnées d'affichage d'un onglet (l'enum vit dans le ViewModel). */
 private fun profileTabLabel(tab: ProfileVideoTab): String = when (tab) {
     ProfileVideoTab.Videos -> "Vidéos"
-    ProfileVideoTab.Liked -> "Aimées"
-    ProfileVideoTab.Saved -> "Sauvegardées"
+    ProfileVideoTab.Favoris -> "Favoris"
+    ProfileVideoTab.Playlists -> "Playlists"
+    ProfileVideoTab.Challenges -> "Challenges"
 }
 
 private fun profileTabIcon(tab: ProfileVideoTab): ImageVector = when (tab) {
-    ProfileVideoTab.Videos -> Icons.Outlined.GridOn
-    ProfileVideoTab.Liked -> Icons.Outlined.Favorite
-    ProfileVideoTab.Saved -> Icons.Outlined.BookmarkBorder
+    ProfileVideoTab.Videos -> Icons.Outlined.PlayCircleOutline
+    ProfileVideoTab.Favoris -> Icons.Outlined.BookmarkBorder
+    ProfileVideoTab.Playlists -> Icons.Outlined.PlaylistPlay
+    ProfileVideoTab.Challenges -> Icons.Outlined.EmojiEvents
 }
 
+/**
+ * Onglets du profil (maquette) : 4 pastilles — l'onglet actif est **encadré en doré** avec un
+ * fond ambré léger, les autres restent sobres. Transition de couleur/bordure animée, icône qui
+ * pop au ressort : la sélection se sent, sans barre indicatrice.
+ */
 @Composable
 private fun ContentTabs(active: ProfileVideoTab, videosCount: String, onTabChange: (ProfileVideoTab) -> Unit) {
     val tabs = ProfileVideoTab.values()
-    androidx.compose.foundation.layout.BoxWithConstraints(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 18.dp)
-            .border(width = 1.dp, color = UnovColors.Line, shape = RoundedCornerShape(0.dp))
-            .padding(start = 16.dp, end = 16.dp, top = 14.dp)
+            .padding(start = 12.dp, end = 12.dp, top = 20.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        val tabWidth = maxWidth / tabs.size
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-            tabs.forEach { tab ->
-                val isActive = tab == active
-                // L'icône active « pop » avec un ressort, l'inactive revient calmement.
-                val iconScale by androidx.compose.animation.core.animateFloatAsState(
-                    targetValue = if (isActive) 1.2f else 1f,
-                    animationSpec = UnovMotion.bouncy(),
-                    label = "tabIcon"
-                )
-                Column(
+        tabs.forEach { tab ->
+            val isActive = tab == active
+            val iconScale by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isActive) 1.15f else 1f,
+                animationSpec = UnovMotion.bouncy(),
+                label = "tabIcon"
+            )
+            val border by androidx.compose.animation.animateColorAsState(
+                targetValue = if (isActive) UnovColors.Accent.copy(alpha = 0.75f) else Color.Transparent,
+                animationSpec = tween(220),
+                label = "tabBorder"
+            )
+            val bg by androidx.compose.animation.animateColorAsState(
+                targetValue = if (isActive) UnovColors.Accent.copy(alpha = 0.10f) else Color.Transparent,
+                animationSpec = tween(220),
+                label = "tabBg"
+            )
+            val content = if (isActive) UnovColors.Accent else UnovColors.TextMute
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(bg)
+                    .border(1.dp, border, RoundedCornerShape(14.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onTabChange(tab) }
+                    .padding(vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = profileTabIcon(tab),
+                    contentDescription = profileTabLabel(tab),
+                    tint = content,
                     modifier = Modifier
-                        .weight(1f)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { onTabChange(tab) }
-                        .padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = profileTabIcon(tab),
-                        contentDescription = profileTabLabel(tab),
-                        tint = if (isActive) UnovColors.Accent else UnovColors.TextMute,
-                        modifier = Modifier
-                            .size(16.dp)
-                            .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
-                    )
-                    Row {
-                        Text(
-                            text = profileTabLabel(tab),
-                            color = if (isActive) UnovColors.Accent else UnovColors.TextMute,
-                            fontSize = 10.sp,
-                            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium
-                        )
-                        if (tab == ProfileVideoTab.Videos && videosCount.isNotBlank()) {
-                            Text(text = " $videosCount", color = UnovColors.TextMute, fontSize = 10.sp)
-                        }
-                    }
-                    // Espace réservé : l'indicateur unique glisse en dessous (voir plus bas).
-                    Spacer(modifier = Modifier.height(2.dp))
-                }
+                        .size(20.dp)
+                        .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
+                )
+                Text(
+                    text = profileTabLabel(tab),
+                    color = content,
+                    fontSize = 10.sp,
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1
+                )
             }
         }
-        // Indicateur UNIQUE qui glisse d'un onglet à l'autre avec un ressort (au lieu d'une
-        // barre qui se téléporte) — la continuité spatiale guide l'œil.
-        val indicatorOffset by androidx.compose.animation.core.animateDpAsState(
-            targetValue = tabWidth * tabs.indexOf(active) + (tabWidth - 22.dp) / 2,
-            animationSpec = UnovMotion.bouncy(),
-            label = "tabIndicator"
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .offset(x = indicatorOffset)
-                .size(width = 22.dp, height = 2.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(UnovGradients.Gold)
-        )
     }
 }
 

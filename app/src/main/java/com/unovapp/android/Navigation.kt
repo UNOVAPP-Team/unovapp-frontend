@@ -10,6 +10,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.unovapp.android.ui.auth.AuthScreen
+import com.unovapp.android.ui.interests.InterestsScreen
 import com.unovapp.android.ui.main.MainScreen
 import com.unovapp.android.ui.onboarding.OnboardingScreen
 import com.unovapp.android.ui.theme.UnovMotion
@@ -17,6 +18,8 @@ import com.unovapp.android.ui.theme.UnovMotion
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
     object Auth : Screen("auth")
+    /** Choix des centres d'intérêt — après l'inscription, avant le feed. */
+    object Interests : Screen("interests")
     object Main : Screen("main")
 }
 
@@ -93,13 +96,34 @@ fun UnovAppNavigation(
             AuthScreen(
                 verifyEmailToken = verifyEmailToken,
                 onAuthenticated = {
-                    navController.navigate(Screen.Main.route) {
+                    // Étape centres d'intérêt : elle se saute d'elle-même si l'utilisateur en
+                    // a déjà (compte existant) → seuls les nouveaux inscrits la voient.
+                    navController.navigate(Screen.Interests.route) {
                         popUpTo(Screen.Auth.route) { inclusive = true }
                     }
                 },
                 onBack = {
                     if (!navController.popBackStack()) {
                         navController.navigate(Screen.Onboarding.route)
+                    }
+                }
+            )
+        }
+
+        composable(
+            route = Screen.Interests.route,
+            enterTransition = { fadeIn(UnovMotion.standard()) },
+            exitTransition = {
+                scaleOut(
+                    targetScale = 1.08f,
+                    animationSpec = UnovMotion.accelerate(UnovMotion.DurationSlow)
+                ) + fadeOut(UnovMotion.fast())
+            }
+        ) {
+            InterestsScreen(
+                onDone = {
+                    navController.navigate(Screen.Main.route) {
+                        popUpTo(Screen.Interests.route) { inclusive = true }
                     }
                 }
             )

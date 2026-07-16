@@ -52,23 +52,26 @@ data class ProfileNetworkState(
     val saveError: String? = null
 )
 
-/** Onglets de la grille du profil (adossés au backend). */
-enum class ProfileVideoTab { Videos, Liked, Saved }
+/**
+ * Onglets du profil (maquette produit) : Vidéos · Favoris · Playlists · Challenges.
+ * L'onglet « Aimées » a été retiré : les vidéos likées sont une donnée privée.
+ * Playlists et Challenges n'ont pas encore d'API (cf. docs/BACKEND_CHALLENGES.md).
+ */
+enum class ProfileVideoTab { Videos, Favoris, Playlists, Challenges }
 
-/** Vidéos du profil : mes vidéos, aimées, sauvegardées (chargées à la demande). */
+/** Vidéos du profil : mes vidéos publiées, mes favoris (chargées à la demande). */
 data class ProfileVideosState(
     val tab: ProfileVideoTab = ProfileVideoTab.Videos,
     val videos: List<FeedVideoUi> = emptyList(),
-    val liked: List<FeedVideoUi> = emptyList(),
     val saved: List<FeedVideoUi> = emptyList(),
     val loading: Boolean = false
 ) {
-    /** Liste affichée pour l'onglet courant. */
+    /** Liste affichée pour l'onglet courant (les onglets sans grille renvoient vide). */
     val current: List<FeedVideoUi>
         get() = when (tab) {
             ProfileVideoTab.Videos -> videos
-            ProfileVideoTab.Liked -> liked
-            ProfileVideoTab.Saved -> saved
+            ProfileVideoTab.Favoris -> saved
+            else -> emptyList()
         }
 }
 
@@ -79,6 +82,7 @@ class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val followStore: FollowStore,
     private val selfStatsStore: SelfStatsStore,
+    private val tokenStore: com.unovapp.android.TokenDataStore,
     feedRefreshBus: FeedRefreshBus
 ) : ViewModel() {
 
@@ -93,6 +97,10 @@ class ProfileViewModel @Inject constructor(
 
     private val _avatarState = MutableStateFlow(AvatarUploadUiState())
     val avatarState: StateFlow<AvatarUploadUiState> = _avatarState.asStateFlow()
+
+    /** Upload de la photo de couverture (même états que l'avatar). */
+    private val _coverState = MutableStateFlow(AvatarUploadUiState())
+    val coverState: StateFlow<AvatarUploadUiState> = _coverState.asStateFlow()
 
     /**
      * Variation du nombre d'abonnements depuis le dernier `/users/me` — permet d'incrémenter
@@ -144,6 +152,10 @@ class ProfileViewModel @Inject constructor(
                 followStore.resetDelta()
                 selfStatsStore.reset()   // les likes reçus autoritatifs sont dans r.data
                 _state.update { it.copy(isLoading = false, profile = r.data, error = null) }
+                // Mémorise mon pseudo : le worker de notifications s'en sert pour écarter
+                // mes propres activités ("monPseudo a aimé ta vidéo") — le payload backend
+                // n'expose pas encore actor_id.
+                tokenStore.saveUsername(r.data.username)
                 loadMyVideos()
             }
             is NetworkResult.Failure -> when (r.error) {
@@ -264,6 +276,43 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /* ---------- Upload photo de couverture ---------- */
+
+    /**
+     * Change la bannière du profil : lecture de l'image choisie → presign → upload direct sur
+     * R2 → confirmation. Le header se met à jour immédiatement (retour visuel instantané), puis
+     * le profil complet est rechargé en silence pour garder des stats autoritatives.
+     */
+    fun uploadCover(contentType: String, uri: Uri) {
+        viewModelScope.launch {
+            _coverState.update { it.copy(isUploading = true, error = null) }
+            val bytes = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }.getOrNull()
+            }
+            if (bytes == null) {
+                _coverState.update { it.copy(isUploading = false, error = "Impossible de lire l'image.") }
+                return@launch
+            }
+            when (val r = userRepository.uploadCover(contentType, bytes)) {
+                is NetworkResult.Success -> {
+                    _state.update { st ->
+                        val merged = st.profile?.copy(coverUrl = r.data.coverUrl) ?: r.data
+                        st.copy(profile = merged)
+                    }
+                    _coverState.update { it.copy(isUploading = false) }
+                    refreshProfileSilently()
+                }
+                is NetworkResult.Failure -> _coverState.update {
+                    it.copy(isUploading = false, error = r.error.userMessage)
+                }
+            }
+        }
+    }
+
+    fun clearCoverError() = _coverState.update { it.copy(error = null) }
+
     fun clearAvatarError() = _avatarState.update { it.copy(error = null) }
 
     /** Déconnexion : efface la session (best-effort backend) puis notifie l'UI. */
@@ -274,40 +323,57 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    /* ---------- Grille vidéos du profil (mes vidéos / aimées / sauvegardées) ---------- */
+    /* ---------- Grille vidéos du profil (mes vidéos / sauvegardées) ---------- */
 
     /** Sélectionne un onglet et charge sa liste à la demande (une seule fois). */
     fun selectTab(tab: ProfileVideoTab) {
         _videos.update { it.copy(tab = tab) }
         when (tab) {
             ProfileVideoTab.Videos -> if (_videos.value.videos.isEmpty()) loadMyVideos()
-            ProfileVideoTab.Liked -> if (_videos.value.liked.isEmpty()) loadLiked()
-            ProfileVideoTab.Saved -> if (_videos.value.saved.isEmpty()) loadSaved()
+            ProfileVideoTab.Favoris -> if (_videos.value.saved.isEmpty()) loadSaved()
+            // Playlists / Challenges : pas encore d'API backend.
+            else -> Unit
         }
     }
 
     private fun loadMyVideos() {
         viewModelScope.launch {
             _videos.update { it.copy(loading = true) }
-            val list = mapVideos(userRepository.userVideos("me"))
+            // TOUTES mes vidéos publiées, pas seulement la 1ʳᵉ page (l'API pagine par 12).
+            val list = loadAllPages { cursor -> userRepository.userVideos("me", cursor) }
             _videos.update { it.copy(loading = false, videos = list) }
-        }
-    }
-
-    private fun loadLiked() {
-        viewModelScope.launch {
-            _videos.update { it.copy(loading = true) }
-            val list = mapVideos(userRepository.likedVideos())
-            _videos.update { it.copy(loading = false, liked = list) }
         }
     }
 
     private fun loadSaved() {
         viewModelScope.launch {
             _videos.update { it.copy(loading = true) }
-            val list = mapVideos(userRepository.savedVideos())
+            val list = loadAllPages { cursor -> userRepository.savedVideos(cursor) }
             _videos.update { it.copy(loading = false, saved = list) }
         }
+    }
+
+    /**
+     * Suit le curseur jusqu'à épuisement → l'intégralité des vidéos publiées est affichée
+     * (avant, seule la 1ʳᵉ page de 12 apparaissait). Garde-fou à 50 pages (600 vidéos) pour
+     * ne jamais boucler indéfiniment si le backend renvoyait un curseur constant.
+     */
+    private suspend fun loadAllPages(
+        fetch: suspend (cursor: String?) -> NetworkResult<FeedResponse>
+    ): List<FeedVideoUi> {
+        val all = mutableListOf<FeedVideoUi>()
+        var cursor: String? = null
+        repeat(50) {
+            when (val r = fetch(cursor)) {
+                is NetworkResult.Success -> {
+                    all += mapVideos(r)
+                    cursor = r.data.nextCursor
+                    if (!r.data.hasMore || cursor.isNullOrBlank()) return all
+                }
+                is NetworkResult.Failure -> return all
+            }
+        }
+        return all
     }
 
     /** Mappe une page feed → UI. Mes propres vidéos héritent de mon pseudo/avatar. */

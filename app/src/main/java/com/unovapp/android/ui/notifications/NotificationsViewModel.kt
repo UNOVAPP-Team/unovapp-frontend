@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.unovapp.android.data.network.NetworkResult
 import com.unovapp.android.data.notification.NotificationItemDto
 import com.unovapp.android.data.notification.NotificationRepository
+import com.unovapp.android.ui.feed.toFeedVideoUi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,18 +21,30 @@ data class NotificationsState(
     val nextCursor: String? = null,
     val hasMore: Boolean = false,
     val unreadCount: Int = 0,
-    val error: String? = null
+    val error: String? = null,
+    /** Vidéo ouverte depuis une notification (tap) — lecture plein écran. */
+    val openedVideo: com.unovapp.android.ui.feed.FeedVideoUi? = null,
+    val openingVideoId: String? = null
 )
 
 @HiltViewModel
 class NotificationsViewModel @Inject constructor(
-    private val repository: NotificationRepository
+    private val repository: NotificationRepository,
+    private val videoRepository: com.unovapp.android.data.video.VideoRepository,
+    private val tokenStore: com.unovapp.android.TokenDataStore
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NotificationsState())
     val state: StateFlow<NotificationsState> = _state.asStateFlow()
 
     init { load() }
+
+    /** Écarte mes propres activités ("monPseudo a aimé ta vidéo") — le backend les crée
+     *  aussi pour l'auteur ; tant qu'il n'expose pas actor_id, on filtre par le titre. */
+    private fun List<NotificationItemDto>.withoutSelf(): List<NotificationItemDto> {
+        val me = tokenStore.readUsernameSync() ?: return this
+        return filterNot { it.title.startsWith("$me ", ignoreCase = true) }
+    }
 
     fun load() {
         viewModelScope.launch {
@@ -40,7 +53,7 @@ class NotificationsViewModel @Inject constructor(
                 is NetworkResult.Success -> _state.update {
                     it.copy(
                         isLoading = false,
-                        items = r.data.data,
+                        items = r.data.data.withoutSelf(),
                         nextCursor = r.data.nextCursor,
                         hasMore = r.data.hasMore,
                         unreadCount = r.data.unreadCount
@@ -62,7 +75,7 @@ class NotificationsViewModel @Inject constructor(
                 is NetworkResult.Success -> _state.update {
                     it.copy(
                         isLoadingMore = false,
-                        items = it.items + r.data.data,
+                        items = it.items + r.data.data.withoutSelf(),
                         nextCursor = r.data.nextCursor,
                         hasMore = r.data.hasMore
                     )
@@ -70,6 +83,31 @@ class NotificationsViewModel @Inject constructor(
                 is NetworkResult.Failure -> _state.update { it.copy(isLoadingMore = false) }
             }
         }
+    }
+
+    /**
+     * Tap sur une notification liée à une vidéo → charge la vidéo (video_id du payload)
+     * et l'ouvre en lecture plein écran. Le créateur voit ainsi DIRECTEMENT laquelle de
+     * ses vidéos a reçu la réaction/le commentaire.
+     */
+    fun openVideo(videoId: String) {
+        if (_state.value.openingVideoId != null) return
+        viewModelScope.launch {
+            _state.update { it.copy(openingVideoId = videoId) }
+            when (val r = videoRepository.getVideo(videoId)) {
+                is NetworkResult.Success -> _state.update {
+                    it.copy(
+                        openingVideoId = null,
+                        openedVideo = r.data.toFeedVideoUi(com.unovapp.android.BuildConfig.VIDEO_BASE_URL)
+                    )
+                }
+                is NetworkResult.Failure -> _state.update { it.copy(openingVideoId = null) }
+            }
+        }
+    }
+
+    fun closeVideo() {
+        _state.update { it.copy(openedVideo = null) }
     }
 
     /** Marque une notification comme lue (optimiste). */

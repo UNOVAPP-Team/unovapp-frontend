@@ -88,7 +88,10 @@ class FeedViewModel @Inject constructor(
             if (cached.isNotEmpty()) {
                 _state.update { s ->
                     if (s.videos.isEmpty()) {
-                        s.copy(isLoading = false, videos = cached.map { dto -> dto.toUi() })
+                        // Mélangé aussi : sinon le feed restauré rejoue le même ordre à chaque
+                        // ouverture (les 1ʳᵉˢ secondes de ces vidéos sont déjà en cache disque,
+                        // donc n'importe laquelle démarre instantanément).
+                        s.copy(isLoading = false, videos = cached.shuffled().map { dto -> dto.toUi() })
                     } else s // le réseau a déjà répondu → il fait foi
                 }
                 resolveCreators()
@@ -169,16 +172,20 @@ class FeedViewModel @Inject constructor(
             _state.update { it.copy(isLoading = true) }
             when (val r = videoRepository.feed()) {
                 is NetworkResult.Success -> {
+                    // Ordre ALÉATOIRE (mesure d'attente avant l'algo backend) : sans ça, tous
+                    // les utilisateurs voient exactement la même liste dans le même ordre, et
+                    // retombent sur les mêmes vidéos à chaque ouverture.
+                    val shuffled = r.data.data.shuffled()
                     _state.update { it.copy(
                         isLoading    = false,
-                        videos       = r.data.data.map { dto -> dto.toUi() },
+                        videos       = shuffled.map { dto -> dto.toUi() },
                         nextCursor   = r.data.nextCursor,
                         hasMore      = r.data.hasMore,
-                        currentPage  = r.data.data.indexOfFirst { it.id == rememberedVideoId }.takeIf { it >= 0 }
-                            ?: it.currentPage.coerceAtMost((r.data.data.size - 1).coerceAtLeast(0))
+                        currentPage  = shuffled.indexOfFirst { it.id == rememberedVideoId }.takeIf { it >= 0 }
+                            ?: it.currentPage.coerceAtMost((shuffled.size - 1).coerceAtLeast(0))
                     )}
                     // Persiste la 1ʳᵉ page → démarrage instantané à la prochaine ouverture.
-                    feedDiskCache.save(r.data.data)
+                    feedDiskCache.save(shuffled)
                     resolveCreators()
                 }
                 // Échec réseau : on garde ce qui est affiché (souvent le cache disque).
@@ -197,12 +204,21 @@ class FeedViewModel @Inject constructor(
             _state.update { it.copy(isLoadingMore = true) }
             when (val r = videoRepository.feed(cursor = cursor)) {
                 is NetworkResult.Success -> {
-                    _state.update { it.copy(
-                        isLoadingMore = false,
-                        videos        = it.videos + r.data.data.map { dto -> dto.toUi() },
-                        nextCursor    = r.data.nextCursor,
-                        hasMore       = r.data.hasMore
-                    )}
+                    _state.update { st ->
+                        // Mélange la page suivante ET écarte les doublons : le backend paginant
+                        // sur une liste non personnalisée, une même vidéo peut revenir.
+                        val known = st.videos.mapTo(HashSet()) { it.id }
+                        val fresh = r.data.data
+                            .filter { it.id !in known }
+                            .shuffled()
+                            .map { dto -> dto.toUi() }
+                        st.copy(
+                            isLoadingMore = false,
+                            videos        = st.videos + fresh,
+                            nextCursor    = r.data.nextCursor,
+                            hasMore       = r.data.hasMore
+                        )
+                    }
                     resolveCreators()
                 }
                 is NetworkResult.Failure -> _state.update { it.copy(isLoadingMore = false) }

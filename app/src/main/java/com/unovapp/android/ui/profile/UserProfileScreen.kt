@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -66,9 +67,15 @@ import com.unovapp.android.data.user.FollowStore
 import com.unovapp.android.data.user.UserProfileDto
 import com.unovapp.android.data.user.UserRepository
 import com.unovapp.android.data.user.UserProfileStore
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.Lock
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.ErrorRetry
 import com.unovapp.android.ui.components.ShimmerBox
+import com.unovapp.android.ui.feed.FeedVideoUi
+import com.unovapp.android.ui.feed.toFeedVideoUi
 import com.unovapp.android.ui.theme.UnovAppTheme
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
@@ -94,7 +101,10 @@ class UserProfileViewModel @Inject constructor(
         val profile: UserProfileDto? = null,
         val error: String? = null,
         val isFollowing: Boolean = false,
-        val followersDelta: Int = 0
+        val followersDelta: Int = 0,
+        /** Vidéos publiées par ce créateur (GET /users/:id/videos) — grille façon TikTok. */
+        val videos: List<com.unovapp.android.ui.feed.FeedVideoUi> = emptyList(),
+        val videosLoading: Boolean = false
     )
 
     private val _state = MutableStateFlow(State())
@@ -102,6 +112,10 @@ class UserProfileViewModel @Inject constructor(
 
     private var userId: String? = null
     private var observing = false
+
+    /** Page brute des vidéos — re-mappée dès que le profil (pseudo/avatar) arrive. */
+    private var videosRaw: List<com.unovapp.android.data.video.FeedVideoDto> = emptyList()
+    private var videosRequested = false
 
     fun load(id: String) {
         userId = id
@@ -121,6 +135,7 @@ class UserProfileViewModel @Inject constructor(
                 }
             }
         }
+        loadVideos(id)
         if (_state.value.profile?.id == id) return
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
@@ -130,9 +145,63 @@ class UserProfileViewModel @Inject constructor(
                     // la réalité même après redémarrage (le FollowStore en mémoire était vide).
                     if (r.data.isFollowing) followStore.merge(listOf(id))
                     _state.update { it.copy(loading = false, profile = r.data, error = null) }
+                    remapVideos()
                 }
                 is NetworkResult.Failure -> _state.update { it.copy(loading = false, error = r.error.debugDetail) }
             }
+        }
+    }
+
+    /**
+     * TOUTES les vidéos publiées du créateur — même endpoint que « mes vidéos » (id au lieu
+     * de "me"), mais en suivant le curseur jusqu'au bout : l'API pagine par 12, on affichait
+     * donc seulement les 12 premières. Garde-fou à 50 pages.
+     */
+    private fun loadVideos(id: String) {
+        if (videosRequested) return
+        videosRequested = true
+        viewModelScope.launch {
+            _state.update { it.copy(videosLoading = true) }
+            val all = mutableListOf<com.unovapp.android.data.video.FeedVideoDto>()
+            var cursor: String? = null
+            repeat(50) {
+                when (val r = userRepository.userVideos(id, cursor)) {
+                    is NetworkResult.Success -> {
+                        all += r.data.data
+                        cursor = r.data.nextCursor
+                        if (!r.data.hasMore || cursor.isNullOrBlank()) {
+                            videosRaw = all
+                            _state.update { it.copy(videosLoading = false) }
+                            remapVideos()
+                            return@launch
+                        }
+                    }
+                    is NetworkResult.Failure -> {
+                        videosRaw = all
+                        _state.update { it.copy(videosLoading = false) }
+                        remapVideos()
+                        return@launch
+                    }
+                }
+            }
+            videosRaw = all
+            _state.update { it.copy(videosLoading = false) }
+            remapVideos()
+        }
+    }
+
+    /** Mappe les DTO → UI en héritant du pseudo/avatar du créateur (dès qu'ils sont connus). */
+    private fun remapVideos() {
+        if (videosRaw.isEmpty()) return
+        val p = _state.value.profile
+        _state.update { st ->
+            st.copy(videos = videosRaw.map { dto ->
+                dto.toFeedVideoUi(
+                    com.unovapp.android.BuildConfig.VIDEO_BASE_URL,
+                    p?.username,
+                    p?.avatarUrl
+                )
+            })
         }
     }
 
@@ -162,9 +231,9 @@ class UserProfileViewModel @Inject constructor(
 
 /* ---------- Tabs ---------- */
 
+/** Onglets d'un profil visité. « Appréciées » retiré : les likes d'un utilisateur sont privés. */
 private enum class UserProfileTab(val label: String) {
     Videos("Vidéos"),
-    Liked("Appréciées"),
     Battles("Battles")
 }
 
@@ -182,6 +251,8 @@ fun UserProfileScreen(
         val s by vm.state.collectAsStateWithLifecycle()
         var activeTab by remember { mutableStateOf(UserProfileTab.Videos) }
         var moreMenuOpen by remember { mutableStateOf(false) }
+        // Vidéo en lecture plein écran (tap sur une vignette de la grille).
+        var detailPlaying by remember { mutableStateOf<Pair<List<FeedVideoUi>, Int>?>(null) }
 
         val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
@@ -227,8 +298,14 @@ fun UserProfileScreen(
                 // Contenu de l'onglet actif
                 item(key = "content_$activeTab") {
                     when (activeTab) {
-                        UserProfileTab.Videos  -> VideoGridPlaceholder("🎬", "Aucune vidéo pour l'instant")
-                        UserProfileTab.Liked   -> VideoGridPlaceholder("❤️", "Aucune vidéo appréciée")
+                        UserProfileTab.Videos -> when {
+                            s.videosLoading && s.videos.isEmpty() -> UserVideosLoadingGrid()
+                            s.videos.isEmpty() -> VideoGridPlaceholder("🎬", "Aucune vidéo pour l'instant")
+                            else -> UserVideoGrid(
+                                videos = s.videos,
+                                onTap = { index -> detailPlaying = s.videos to index }
+                            )
+                        }
                         UserProfileTab.Battles -> VideoGridPlaceholder("⚔️", "Aucun battle pour l'instant")
                     }
                 }
@@ -245,9 +322,121 @@ fun UserProfileScreen(
                     onDismiss = { moreMenuOpen = false }
                 )
             }
+
+            // Lecture plein écran des vidéos du créateur (même expérience que le feed).
+            detailPlaying?.let { (list, index) ->
+                com.unovapp.android.ui.feed.VideoDetailScreen(
+                    videos = list,
+                    startIndex = index,
+                    onBack = { detailPlaying = null }
+                )
+            }
         }
     }
 }
+
+/* ---------- Grille des vraies vidéos du créateur ---------- */
+
+/** Grille 3 colonnes des vidéos publiées — même style que le profil perso (vues + durée). */
+@Composable
+private fun UserVideoGrid(videos: List<FeedVideoUi>, onTap: (Int) -> Unit) {
+    Column(
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        videos.chunked(3).forEachIndexed { rowIndex, row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                row.forEachIndexed { colIndex, v ->
+                    val index = rowIndex * 3 + colIndex
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(9f / 14f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(UnovGradients.videoBg(kotlin.math.abs(v.id.hashCode()) % 6))
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { onTap(index) }
+                    ) {
+                        if (!v.thumbnailUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = v.thumbnailUrl,
+                                contentDescription = v.description.take(40),
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        // Scrim bas — lisibilité du compteur de vues.
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .background(
+                                    Brush.verticalGradient(
+                                        0f to Color.Transparent,
+                                        1f to Color.Black.copy(alpha = 0.55f)
+                                    )
+                                )
+                        )
+                        if (v.durationSec > 0) {
+                            Text(
+                                text = "%d:%02d".format(v.durationSec / 60, v.durationSec % 60),
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(5.dp)
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(Color.Black.copy(alpha = 0.45f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = "Vues",
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(text = v.viewsFmt, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+                repeat(3 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Squelettes shimmer pendant le chargement de la grille. */
+@Composable
+private fun UserVideosLoadingGrid() {
+    Column(
+        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        repeat(2) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                repeat(3) {
+                    ShimmerBox(
+                        modifier = Modifier.weight(1f).aspectRatio(9f / 14f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 
 /** Menu ⋮ d'un profil visité : bloquer / débloquer l'utilisateur. */
 @Composable
@@ -314,6 +503,39 @@ private fun ProfileHero(
                     .align(Alignment.TopCenter)
             ) {
                 Box(modifier = Modifier.fillMaxSize().background(coverBrush(profile.subscriptionTier)))
+
+                // Photo de couverture du créateur (si définie) — révélation en fondu + dézoom.
+                if (!profile.coverUrl.isNullOrBlank()) {
+                    val reveal = remember(profile.coverUrl) { androidx.compose.animation.core.Animatable(0f) }
+                    LaunchedEffect(profile.coverUrl) {
+                        reveal.animateTo(1f, androidx.compose.animation.core.tween(700))
+                    }
+                    AsyncImage(
+                        model = profile.coverUrl,
+                        contentDescription = "Photo de couverture",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = reveal.value
+                                val s = 1.12f - 0.12f * reveal.value
+                                scaleX = s
+                                scaleY = s
+                            }
+                    )
+                    // Voile de lisibilité (le nom et les actions passent par-dessus).
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0f to Color.Black.copy(alpha = 0.40f),
+                                    0.5f to Color.Black.copy(alpha = 0.15f),
+                                    1f to Color.Black.copy(alpha = 0.55f)
+                                )
+                            )
+                    )
+                }
 
                 // Glow d'accent en coin supérieur-droit (profondeur visuelle)
                 Box(
@@ -417,9 +639,20 @@ private fun ProfileHero(
                     modifier = Modifier.weight(1f)
                 )
                 StatDivider()
-                StatTile(value = "—", label = "Vidéos", onClick = null, modifier = Modifier.weight(1f))
+                StatTile(
+                    value = compact(profile.videosCount),
+                    label = "Vidéos",
+                    onClick = null,
+                    modifier = Modifier.weight(1f)
+                )
                 StatDivider()
-                StatTile(value = "—", label = "Battles", onClick = null, modifier = Modifier.weight(1f))
+                // Total de J'aime reçus — parité TikTok (Abonnements / Abonnés / Vidéos / J'aime).
+                StatTile(
+                    value = compact(profile.totalLikesReceived),
+                    label = "J'aime",
+                    onClick = null,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             // ── Boutons d'action ─────────────────────────────────────────────────
@@ -544,7 +777,17 @@ private fun ProfileAvatarRing(
                     .background(UnovColors.BgBase),
                 contentAlignment = Alignment.Center
             ) {
-                Avatar(idx = avatarIdx, name = profile.username, size = size - 8.dp)
+                // Vraie photo de profil (Coil) quand elle existe — repli sur les initiales.
+                if (!profile.avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = profile.avatarUrl,
+                        contentDescription = profile.username,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(size - 8.dp).clip(CircleShape)
+                    )
+                } else {
+                    Avatar(idx = avatarIdx, name = profile.username, size = size - 8.dp)
+                }
             }
         }
 

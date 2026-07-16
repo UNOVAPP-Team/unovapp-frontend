@@ -23,7 +23,13 @@ data class InterestsState(
     val selected: Set<String> = emptySet(),
     val loading: Boolean = true,
     val saving: Boolean = false,
-    val saved: Boolean = false
+    val saved: Boolean = false,
+    /**
+     * L'utilisateur a DÉJÀ des centres d'intérêt enregistrés côté backend → l'écran
+     * d'onboarding ne doit pas s'afficher (on file directement au feed).
+     * `null` = pas encore déterminé (chargement en cours).
+     */
+    val alreadySet: Boolean? = null
 )
 
 @HiltViewModel
@@ -39,8 +45,16 @@ class InterestsViewModel @Inject constructor(
     private fun load() {
         viewModelScope.launch {
             when (val r = userRepository.getInterests()) {
-                is NetworkResult.Success -> _state.update { it.copy(loading = false, selected = r.data.categories.toSet()) }
-                is NetworkResult.Failure -> _state.update { it.copy(loading = false) }
+                is NetworkResult.Success -> _state.update {
+                    it.copy(
+                        loading = false,
+                        selected = r.data.categories.toSet(),
+                        alreadySet = r.data.categories.isNotEmpty()
+                    )
+                }
+                // Échec réseau → on ne bloque pas l'entrée dans l'app : on considère que
+                // le choix reste à faire (l'utilisateur pourra passer).
+                is NetworkResult.Failure -> _state.update { it.copy(loading = false, alreadySet = false) }
             }
         }
     }

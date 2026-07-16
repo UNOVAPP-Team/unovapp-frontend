@@ -11,6 +11,8 @@ data class UserProfileDto(
     @SerializedName("display_name") val displayName: String?,
     val bio: String?,
     @SerializedName("avatar_url") val avatarUrl: String?,
+    /** Photo de couverture du profil (bannière). Null tant que le créateur n'en a pas mis. */
+    @SerializedName("cover_url") val coverUrl: String? = null,
     @SerializedName("followers_count") val followersCount: Int = 0,
     @SerializedName("following_count") val followingCount: Int = 0,
     @SerializedName("is_verified") val isVerified: Boolean = false,
@@ -69,6 +71,18 @@ data class AvatarPresignResponse(
 
 /** Corps PUT /users/me/avatar — confirme l'avatar uploadé sur S3 */
 data class AvatarConfirmRequest(val key: String)
+
+/** Photo de couverture — même flux que l'avatar (presign → PUT R2 → confirm). */
+data class CoverPresignRequest(val contentType: String)
+data class CoverPresignResponse(
+    val key: String,
+    val uploadUrl: String,
+    val method: String = "PUT",
+    val contentType: String = "image/jpeg",
+    val publicUrl: String = "",
+    val expiresIn: Int = 300
+)
+data class CoverConfirmRequest(val key: String)
 
 /** Enveloppe paginée standard du backend : { data, total, page, limit }. */
 data class PagedResponse<T>(

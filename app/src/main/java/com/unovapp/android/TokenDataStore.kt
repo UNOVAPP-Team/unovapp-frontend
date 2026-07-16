@@ -91,6 +91,17 @@ class TokenDataStore @Inject constructor(
     suspend fun readUserId(): String? =
         withContext(Dispatchers.IO) { runCatching { prefs.getString(KEY_USER_ID, null) }.getOrNull() }
 
+    /** Pseudo de l'utilisateur connecté — sert notamment à filtrer ses propres activités
+     *  dans les notifications (le backend n'expose pas encore actor_id). */
+    suspend fun saveUsername(username: String) {
+        withContext(Dispatchers.IO) {
+            runCatching { prefs.edit().putString(KEY_USERNAME, username).commit() }
+        }
+    }
+
+    fun readUsernameSync(): String? =
+        runCatching { prefs.getString(KEY_USERNAME, null) }.getOrNull()
+
     fun getAccessToken(): Flow<String?> = _accessToken.asStateFlow()
 
     suspend fun clear() = withContext(Dispatchers.IO) { clearSync() }
@@ -133,5 +144,6 @@ class TokenDataStore @Inject constructor(
         private const val KEY_ACCESS  = "access_token"
         private const val KEY_REFRESH = "refresh_token"
         private const val KEY_USER_ID = "user_id"
+        private const val KEY_USERNAME = "username"
     }
 }

@@ -66,6 +66,14 @@ interface UserApi {
     @PUT("users/me/avatar")
     suspend fun avatarConfirm(@Body body: AvatarConfirmRequest): UserProfileDto
 
+    /** URL pré-signée pour uploader la photo de couverture (bannière du profil). */
+    @POST("users/me/cover/presign")
+    suspend fun coverPresign(@Body body: CoverPresignRequest): CoverPresignResponse
+
+    /** Confirme la couverture uploadée → met à jour cover_url dans le profil. */
+    @PUT("users/me/cover")
+    suspend fun coverConfirm(@Body body: CoverConfirmRequest): UserProfileDto
+
     /* ---------- Sprint 1/2/3 ---------- */
 
     /** Vidéos d'un utilisateur (`:id` = UUID ou `me`). Auth optionnelle → format feed. */

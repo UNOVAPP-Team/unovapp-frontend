@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.AlternateEmail
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -98,7 +99,16 @@ fun NotificationsScreen(
                 contentPadding = contentPadding
             ) {
                 items(state.items, key = { it.id }) { n ->
-                    NotificationRow(n, onClick = { vm.markRead(n.id) })
+                    NotificationRow(
+                        n = n,
+                        loading = state.openingVideoId == n.data["video_id"],
+                        onClick = {
+                            vm.markRead(n.id)
+                            // Notification liée à une vidéo → on l'ouvre : le créateur voit
+                            // immédiatement LAQUELLE de ses vidéos a reçu la réaction.
+                            n.data["video_id"]?.takeIf { it.isNotBlank() }?.let(vm::openVideo)
+                        }
+                    )
                 }
                 item {
                     // Pagination : charge plus en atteignant le bas.
@@ -112,6 +122,15 @@ fun NotificationsScreen(
                 }
             }
         }
+    }
+
+    // Vidéo ouverte depuis une notification → lecture plein écran (même lecteur que le feed).
+    state.openedVideo?.let { video ->
+        com.unovapp.android.ui.feed.VideoDetailScreen(
+            videos = listOf(video),
+            startIndex = 0,
+            onBack = { vm.closeVideo() }
+        )
     }
 }
 
@@ -140,8 +159,11 @@ private fun EmptyNotifications(error: String?) {
 }
 
 @Composable
-private fun NotificationRow(n: NotificationItemDto, onClick: () -> Unit) {
+private fun NotificationRow(n: NotificationItemDto, loading: Boolean = false, onClick: () -> Unit) {
     val (icon, tint) = iconFor(n.type)
+    // Emoji du type de réaction (le backend l'envoie dans data["reaction"] quand il le connaît ;
+    // à défaut il est souvent déjà dans le titre → on n'ajoute rien).
+    val reactionEmoji = n.data["reaction"]?.let { reactionEmojiFor(it) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -154,7 +176,13 @@ private fun NotificationRow(n: NotificationItemDto, onClick: () -> Unit) {
         Box(
             modifier = Modifier.size(42.dp).clip(CircleShape).background(tint.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
-        ) { Icon(icon, null, tint = tint, modifier = Modifier.size(21.dp)) }
+        ) {
+            if (reactionEmoji != null) {
+                Text(reactionEmoji, fontSize = 20.sp)
+            } else {
+                Icon(icon, null, tint = tint, modifier = Modifier.size(21.dp))
+            }
+        }
 
         Column(Modifier.weight(1f)) {
             Text(
@@ -170,10 +198,35 @@ private fun NotificationRow(n: NotificationItemDto, onClick: () -> Unit) {
             Text(relativeTime(n.createdAt), color = UnovColors.TextMute, fontSize = 11.sp)
         }
 
-        if (!n.isRead) {
-            Box(Modifier.size(9.dp).clip(CircleShape).background(UnovColors.Accent))
+        when {
+            // Chargement de la vidéo liée (tap en cours).
+            loading -> CircularProgressIndicator(
+                color = UnovColors.Accent,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(18.dp)
+            )
+            // Affordance « ouvrir la vidéo concernée ».
+            n.data["video_id"]?.isNotBlank() == true -> Icon(
+                Icons.Outlined.PlayCircleOutline,
+                contentDescription = "Voir la vidéo",
+                tint = UnovColors.TextMute,
+                modifier = Modifier.size(20.dp)
+            )
+            !n.isRead -> Box(Modifier.size(9.dp).clip(CircleShape).background(UnovColors.Accent))
         }
     }
+}
+
+/** Emoji correspondant au type de réaction envoyé par le backend (data["reaction"]). */
+private fun reactionEmojiFor(reaction: String): String = when (reaction.lowercase()) {
+    "like" -> "👍"
+    "love" -> "❤️"
+    "haha" -> "😂"
+    "care", "support" -> "🤗"
+    "wow" -> "😮"
+    "sad" -> "😢"
+    "celebrate" -> "🎉"
+    else -> "❤️"
 }
 
 /** Icône + teinte selon le type backend (video.liked, video.commented, user.followed, comment_mentioned, video.transcoded…). */

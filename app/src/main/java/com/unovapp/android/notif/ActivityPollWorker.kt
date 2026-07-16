@@ -55,8 +55,16 @@ class ActivityPollWorker(
 
                 // Items du plus récent au plus ancien → on prend ceux au-dessus du dernier vu
                 // (nouveaux), non lus, et on notifie (du plus ancien au plus récent, max 5).
+                // Filtre anti-auto-notification : le backend crée une entrée même quand c'est
+                // MOI qui aime/commente ma propre vidéo ("monPseudo a aimé ta vidéo"). Le payload
+                // n'expose pas actor_id → on écarte les titres qui commencent par mon pseudo.
+                val myUsername = deps.tokenStore().readUsernameSync()
                 items.takeWhile { it.id != lastSeenId }
                     .filter { !it.isRead }
+                    .filter { item ->
+                        myUsername.isNullOrBlank() ||
+                            !item.title.startsWith("$myUsername ", ignoreCase = true)
+                    }
                     .take(5)
                     .reversed()
                     .forEach { item ->

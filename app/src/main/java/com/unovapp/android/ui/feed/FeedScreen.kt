@@ -232,6 +232,19 @@ fun FeedScreen(
             beyondBoundsPageCount = 1,
             modifier = Modifier.fillMaxSize()
         ) { page ->
+            // Parallax inter-vidéos : la page qui sort rétrécit légèrement et s'assombrit,
+            // celle qui entre émerge — profondeur au swipe, sans toucher au pool vidéo.
+            // Lu dans graphicsLayer {} → recalcul au draw, ZÉRO recomposition par frame.
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    val dist = pagerState.currentPage - page + pagerState.currentPageOffsetFraction
+                    val f = kotlin.math.abs(dist).coerceIn(0f, 1f)
+                    val s = 1f - 0.045f * f
+                    scaleX = s
+                    scaleY = s
+                    alpha = 1f - 0.22f * f
+                }
+            ) {
             FeedItem(
                 video = videos[page],
                 isCurrentPage = page == pagerState.currentPage,
@@ -269,6 +282,7 @@ fun FeedScreen(
                 isSelf = currentUserId != null && videos[page].creatorId == currentUserId,
                 onOpenProfile = { creatorId -> if (creatorId.isNotBlank()) onOpenProfile(creatorId) }
             )
+            }
         }
 
         FeedHeader(

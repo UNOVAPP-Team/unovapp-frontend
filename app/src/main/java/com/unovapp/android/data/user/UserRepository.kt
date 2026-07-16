@@ -30,6 +30,9 @@ interface UserRepository {
     /** Flux complet d'upload avatar : presign → PUT S3 → confirm. Retourne le profil mis à jour. */
     suspend fun uploadAvatar(contentType: String, bytes: ByteArray): NetworkResult<UserProfileDto>
 
+    /** Photo de couverture : presign → PUT direct sur R2 → confirmation (même flux que l'avatar). */
+    suspend fun uploadCover(contentType: String, bytes: ByteArray): NetworkResult<UserProfileDto>
+
     /* ---------- Sprint 1/2/3 ---------- */
     suspend fun userVideos(id: String, cursor: String? = null): NetworkResult<FeedResponse>
     suspend fun likedVideos(cursor: String? = null): NetworkResult<FeedResponse>
@@ -107,6 +110,23 @@ class UserRepositoryImpl(
                 }
             }
             api.avatarConfirm(AvatarConfirmRequest(presign.key)).also(profileStore::upsert)
+        }
+
+    override suspend fun uploadCover(contentType: String, bytes: ByteArray): NetworkResult<UserProfileDto> =
+        safeCall {
+            val presign = api.coverPresign(CoverPresignRequest(contentType))
+            val body = bytes.toRequestBody(contentType.toMediaType())
+            val request = Request.Builder()
+                .url(presign.uploadUrl)
+                .put(body)
+                .header("Content-Type", contentType)
+                .build()
+            withContext(Dispatchers.IO) {
+                s3Client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw IOException("R2 PUT ${response.code}")
+                }
+            }
+            api.coverConfirm(CoverConfirmRequest(presign.key)).also(profileStore::upsert)
         }
 
     override suspend fun userVideos(id: String, cursor: String?): NetworkResult<FeedResponse> =

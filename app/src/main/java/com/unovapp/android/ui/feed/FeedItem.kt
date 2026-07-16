@@ -1,6 +1,10 @@
 package com.unovapp.android.ui.feed
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -14,7 +18,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.animateDpAsState
@@ -67,6 +73,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
@@ -88,8 +98,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.ParticleBurst
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
+import kotlin.math.roundToInt
+import kotlin.random.Random
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -163,9 +176,14 @@ fun FeedItem(
         label = "hudReveal"
     )
 
-    // Heart pop : compteur incrémenté à chaque double-tap → déclenche l'animation
+    // Heart pop : compteur incrémenté à chaque double-tap → déclenche l'animation.
+    // Position mémorisée = le cœur surgit SOUS LE DOIGT (façon TikTok), incliné aléatoirement.
     var heartPopKey by remember(video.id) { mutableIntStateOf(0) }
     var showHeartPop by remember { mutableStateOf(false) }
+    var heartPopPos by remember { mutableStateOf(Offset.Zero) }
+    val heartTilt = remember(heartPopKey) {
+        if (heartPopKey == 0) 0f else Random.nextInt(-16, 17).toFloat()
+    }
 
     LaunchedEffect(heartPopKey) {
         if (heartPopKey > 0) {
@@ -182,12 +200,13 @@ fun FeedItem(
             .pointerInput(video.id) {
                 detectTapGestures(
                     onTap = { onTogglePlay() },
-                    onDoubleTap = {
+                    onDoubleTap = { pos ->
                         // Double-tap = j'aime (façon TikTok) : cœur + like si pas déjà réagi.
                         if (ReactionMemory.map[video.id] == null) {
                             ReactionMemory.set(video.id, Reaction.Love)
                             onLike(video.id)
                         }
+                        heartPopPos = pos
                         heartPopKey++
                     }
                 )
@@ -249,42 +268,47 @@ fun FeedItem(
                 )
         )
 
-        // Bloc tendance + Défier — positionné au centre-gauche de l'écran (style TikTok).
-        // En haut-gauche il entrait en conflit visuel avec le header. Mi-écran = zone neutre
-        // où l'œil se pose naturellement entre la vidéo et le HUD du bas.
-        if (video.id == "v1") {
-            Column(
+        // Heart pop sur double-tap — surgit sous le doigt, incliné, avec salve d'étincelles.
+        if (heartPopKey > 0) {
+            Box(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.Start
+                    .offset {
+                        IntOffset(
+                            (heartPopPos.x - 100.dp.toPx()).roundToInt(),
+                            (heartPopPos.y - 110.dp.toPx()).roundToInt()
+                        )
+                    }
+                    .size(200.dp)
             ) {
-                TrendingBadge()
-                ChallengeButton(onClick = onChallengeClick)
-            }
-        }
-
-        // Heart pop sur double-tap
-        AnimatedVisibility(
-            visible = showHeartPop,
-            enter = scaleIn(
-                initialScale = 0f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
+                AnimatedVisibility(
+                    visible = showHeartPop,
+                    enter = scaleIn(
+                        initialScale = 0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) + fadeIn(tween(120)),
+                    exit = scaleOut(targetScale = 1.3f, animationSpec = tween(300)) +
+                            fadeOut(tween(300)),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = null,
+                        tint = UnovColors.Accent,
+                        modifier = Modifier
+                            .size(120.dp)
+                            .graphicsLayer { rotationZ = heartTilt }
+                    )
+                }
+                ParticleBurst(
+                    trigger = heartPopKey,
+                    particleCount = 26,
+                    maxRadius = 92.dp,
+                    modifier = Modifier.matchParentSize()
                 )
-            ) + fadeIn(tween(120)),
-            exit = scaleOut(targetScale = 1.3f, animationSpec = tween(300)) +
-                    fadeOut(tween(300)),
-            modifier = Modifier.align(Alignment.Center)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Favorite,
-                contentDescription = null,
-                tint = UnovColors.Accent,
-                modifier = Modifier.size(140.dp)
-            )
+            }
         }
 
         // Rail droit : Avatar+Follow, Like, Comment, Gift, Send, More, Disque musical.
@@ -372,97 +396,74 @@ fun FeedItem(
     }
 }
 
-/* ---------- Trending + Défier ---------- */
+/* ---------- Action rail (right side) ---------- */
 
-@Composable
-private fun TrendingBadge(modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(Color(0xFF0A0A0A).copy(alpha = 0.82f))
-            .border(1.dp, UnovColors.Accent.copy(alpha = 0.32f), RoundedCornerShape(999.dp))
-            .padding(start = 6.dp, top = 5.dp, end = 12.dp, bottom = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(UnovGradients.Gold),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.LocalFireDepartment,
-                contentDescription = null,
-                tint = Color(0xFF0D0D0D),
-                modifier = Modifier.size(12.dp)
-            )
-        }
-        Column {
-            Text(
-                text = "TENDANCE",
-                color = UnovColors.TextMute,
-                fontSize = 8.5.sp,
-                letterSpacing = 1.4.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = "#1 · Bénin",
-                color = UnovColors.Accent,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.1).sp
-            )
-        }
-    }
-}
+/** Ombre portée douce pour tout texte posé sur la vidéo (lisibilité sur fond clair). */
+private val HudTextShadow = Shadow(color = Color(0xB3000000), blurRadius = 8f)
 
 /**
- * CTA Battle contextuel — n'apparaît que sur les vidéos tendance.
- * Tap → ouvre le flow de création de Battle avec la vidéo pré-sélectionnée comme adversaire.
- *
- * Pulse subtil pour attirer l'œil sans agresser.
+ * Compteur animé : quand la valeur change, l'ancien chiffre glisse vers le haut et le
+ * nouveau entre par le bas — au lieu de « sauter » brutalement.
  */
 @Composable
-private fun ChallengeButton(onClick: () -> Unit) {
-    val noRipple = remember { MutableInteractionSource() }
-    val transition = rememberInfiniteTransition(label = "challengePulse")
-    val glow by transition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.55f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1600, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "challengeGlow"
-    )
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(UnovColors.Accent.copy(alpha = 0.08f))
-            .border(1.dp, UnovColors.Accent.copy(alpha = glow), RoundedCornerShape(999.dp))
-            .clickable(interactionSource = noRipple, indication = null, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
+private fun AnimatedCount(
+    count: String,
+    color: Color = Color.White,
+    fontSize: androidx.compose.ui.unit.TextUnit = 12.sp,
+    onClick: (() -> Unit)? = null
+) {
+    AnimatedContent(
+        targetState = count,
+        transitionSpec = {
+            (slideInVertically { it } + fadeIn(tween(160))) togetherWith
+                (slideOutVertically { -it } + fadeOut(tween(160)))
+        },
+        label = "count"
+    ) { value ->
         Text(
-            text = "⚔",
-            color = UnovColors.Accent,
-            fontSize = 12.sp
-        )
-        Text(
-            text = "DÉFIER",
-            color = UnovColors.Accent,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.2.sp
+            text = value,
+            color = color,
+            fontSize = fontSize,
+            fontWeight = FontWeight.SemiBold,
+            style = TextStyle(shadow = HudTextShadow),
+            modifier = if (onClick != null) {
+                Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick
+                )
+            } else Modifier
         )
     }
 }
 
-/* ---------- Action rail (right side) ---------- */
+/** Icône du rail sur socle d'ombre radiale — lisible sur n'importe quelle vidéo. */
+@Composable
+private fun RailIcon(
+    icon: ImageVector,
+    tint: Color,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.size(36.dp), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color.Black.copy(alpha = 0.30f), Color.Transparent)
+                    ),
+                    CircleShape
+                )
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(30.dp)
+        )
+    }
+}
 
 @Composable
 private fun ActionRail(
@@ -513,11 +514,12 @@ private fun ActionRail(
             label = "Commentaires"
         )
 
-        // Enregistrer (favoris) — signet plein orange quand sauvegardé.
+        // Enregistrer (favoris) — signet plein or quand sauvegardé (pas de label texte :
+        // l'état rempli/vide EST le message, comme TikTok).
         ActionPill(
             icon = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
             tint = if (isSaved) UnovColors.Accent else Color.White,
-            count = "Enreg.",
+            count = "",
             onClick = onSaveClick,
             label = "Enregistrer"
         )
@@ -561,8 +563,21 @@ private fun AvatarWithFollow(
         ),
         label = "followRing"
     )
+    // Salve d'étincelles quand le suivi est confirmé (récompense immédiate).
+    var followBurst by remember { mutableIntStateOf(0) }
+    var firstFollow by remember { mutableStateOf(true) }
+    LaunchedEffect(followed) {
+        if (firstFollow) { firstFollow = false; return@LaunchedEffect }
+        if (followed) followBurst++
+    }
 
     Box(modifier = Modifier.size(64.dp)) {
+        ParticleBurst(
+            trigger = followBurst,
+            particleCount = 18,
+            maxRadius = 46.dp,
+            modifier = Modifier.matchParentSize()
+        )
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -659,8 +674,7 @@ private fun ActionPill(
     tint: Color,
     count: String,
     onClick: () -> Unit,
-    label: String,
-    pop: Boolean = false
+    label: String
 ) {
     val noRipple = remember { MutableInteractionSource() }
     val pressed by noRipple.collectIsPressedAsState()
@@ -669,17 +683,17 @@ private fun ActionPill(
         animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "pillPress"
     )
-    val popScale by animateFloatAsState(
-        targetValue = if (pop) 1.18f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "pillPop"
-    )
+    // Pulse bouncy quand l'ÉTAT change (icône outline ↔ remplie : save, réaction…).
+    val statePop = remember { androidx.compose.animation.core.Animatable(1f) }
+    var firstIcon by remember { mutableStateOf(true) }
+    LaunchedEffect(icon) {
+        if (firstIcon) { firstIcon = false; return@LaunchedEffect }
+        statePop.snapTo(0.72f)
+        statePop.animateTo(1f, com.unovapp.android.ui.theme.UnovMotion.bouncy())
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier
             .scale(pressScale)
             .clickable(
@@ -688,20 +702,15 @@ private fun ActionPill(
                 onClick = onClick
             )
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
+        RailIcon(
+            icon = icon,
             tint = tint,
-            modifier = Modifier
-                .size(36.dp)
-                .scale(popScale)
+            label = label,
+            modifier = Modifier.scale(statePop.value)
         )
-        Text(
-            text = count,
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold
-        )
+        if (count.isNotBlank()) {
+            AnimatedCount(count = count)
+        }
     }
 }
 
@@ -712,36 +721,46 @@ private fun GiftButton(
     onCountClick: () -> Unit
 ) {
     val noRipple = remember { MutableInteractionSource() }
+    // Halo orange qui respire : le cadeau garde sa présence de différenciateur Mobile Money
+    // sans le gros disque plein qui écrasait la hiérarchie du rail.
+    val halo by rememberInfiniteTransition(label = "giftHalo").animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            tween(1600, easing = LinearEasing),
+            RepeatMode.Reverse
+        ),
+        label = "giftHaloT"
+    )
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .background(UnovGradients.Gold)
+                .size(36.dp)
                 .clickable(interactionSource = noRipple, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Redeem,
-                contentDescription = "Envoyer un cadeau",
-                tint = Color(0xFF0D0D0D),
-                modifier = Modifier.size(24.dp)
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        val s = 0.9f + 0.25f * halo
+                        scaleX = s
+                        scaleY = s
+                        alpha = 1.15f - halo
+                    }
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(UnovColors.AccentGlowStrong, Color.Transparent)
+                        ),
+                        CircleShape
+                    )
             )
+            RailIcon(icon = Icons.Outlined.Redeem, tint = UnovColors.AccentLight, label = "Envoyer un cadeau")
         }
-        Text(
-            text = giftsFmt,
-            color = UnovColors.Accent,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onCountClick
-            )
-        )
+        AnimatedCount(count = giftsFmt, color = UnovColors.AccentLight, onClick = onCountClick)
     }
 }
 
@@ -799,6 +818,7 @@ private fun BottomInfo(
                 color = Color.White,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
+                style = TextStyle(shadow = HudTextShadow),
                 modifier = Modifier.clickable(
                     interactionSource = noRipple,
                     indication = null,
@@ -835,6 +855,7 @@ private fun BottomInfo(
         }
 
         // Caption tronquée à 2 lignes par défaut → tap pour étendre. Hashtags/mentions en or.
+        var captionOverflows by remember(video.id) { mutableStateOf(false) }
         Text(
             text = highlightCaption(video.description),
             color = Color.White,
@@ -842,12 +863,29 @@ private fun BottomInfo(
             lineHeight = 20.sp,
             maxLines = if (captionExpanded) Int.MAX_VALUE else 2,
             overflow = TextOverflow.Ellipsis,
+            style = TextStyle(shadow = HudTextShadow),
+            onTextLayout = { captionOverflows = it.hasVisualOverflow },
             modifier = Modifier.clickable(
                 interactionSource = noRipple,
                 indication = null,
                 onClick = onToggleCaption
             )
         )
+        // Affordance d'extension explicite (le « … » seul est facile à rater).
+        if (captionOverflows && !captionExpanded) {
+            Text(
+                text = "Voir plus",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                style = TextStyle(shadow = HudTextShadow),
+                modifier = Modifier.clickable(
+                    interactionSource = noRipple,
+                    indication = null,
+                    onClick = onToggleCaption
+                )
+            )
+        }
 
         // Méta-ligne fusionnée : 👁 vues · ville · temps · son original
         MetaRow(creatorUsername = video.creatorUsername, ageText = ageText, viewsFmt = video.viewsFmt)
@@ -855,57 +893,91 @@ private fun BottomInfo(
 }
 
 /**
- * Méta-ligne unique : 📍 Cotonou · il y a 2 h · ♬ Son original — @creator
- * Remplace les anciens pills/waveform empilés. Le mini-disque rotatif donne le signal "audio".
+ * Méta en 2 lignes hiérarchisées :
+ *  1. 👁 vues · temps — l'info factuelle, discrète.
+ *  2. mini-disque rotatif + « Son original · @creator » en marquee — le signal audio,
+ *     qui défile s'il est trop long (façon TikTok).
+ * (Le « 📍 Cotonou » codé en dur a été retiré : pas de fausse donnée à l'écran.)
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MetaRow(creatorUsername: String, ageText: String, viewsFmt: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        // Compteur de vues (façon TikTok) — masqué si 0/inconnu.
-        if (viewsFmt.isNotBlank() && viewsFmt != "0") {
-            Icon(
-                imageVector = Icons.Outlined.Visibility,
-                contentDescription = "Vues",
-                tint = Color.White.copy(alpha = 0.88f),
-                modifier = Modifier.size(13.dp)
-            )
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Compteur de vues (façon TikTok) — masqué si 0/inconnu.
+            if (viewsFmt.isNotBlank() && viewsFmt != "0") {
+                Icon(
+                    imageVector = Icons.Outlined.Visibility,
+                    contentDescription = "Vues",
+                    tint = Color.White.copy(alpha = 0.88f),
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = "$viewsFmt vues",
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    style = TextStyle(shadow = HudTextShadow)
+                )
+                Dot()
+            }
             Text(
-                text = "$viewsFmt vues",
+                text = ageText,
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                style = TextStyle(shadow = HudTextShadow)
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            TinyMusicDisc()
+            Text(
+                text = "Son original · @$creatorUsername",
                 color = Color.White.copy(alpha = 0.88f),
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
+                maxLines = 1,
+                style = TextStyle(shadow = HudTextShadow),
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .basicMarquee(iterations = Int.MAX_VALUE)
             )
-            Dot()
         }
+    }
+}
+
+/** Mini-disque qui tourne — signal audio compact de la ligne musique. */
+@Composable
+private fun TinyMusicDisc() {
+    val rotation by rememberInfiniteTransition(label = "tinyDisc").animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            tween(3500, easing = LinearEasing),
+            RepeatMode.Restart
+        ),
+        label = "tinyDiscRot"
+    )
+    Box(
+        modifier = Modifier
+            .size(18.dp)
+            .rotate(rotation)
+            .clip(CircleShape)
+            .background(
+                Brush.radialGradient(colors = listOf(Color(0xFF2A2A2A), Color(0xFF101010)))
+            )
+            .border(1.dp, UnovColors.Accent.copy(alpha = 0.7f), CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
         Icon(
-            imageVector = Icons.Filled.Place,
+            imageVector = Icons.Outlined.MusicNote,
             contentDescription = null,
             tint = UnovColors.Accent,
-            modifier = Modifier.size(13.dp)
-        )
-        Text(
-            text = "Cotonou",
-            color = Color.White.copy(alpha = 0.88f),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Dot()
-        Text(
-            text = ageText,
-            color = Color.White.copy(alpha = 0.6f),
-            fontSize = 12.sp
-        )
-        Dot()
-        Text(
-            text = "♬ Son original · @$creatorUsername",
-            color = Color.White.copy(alpha = 0.88f),
-            fontSize = 12.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false)
+            modifier = Modifier.size(10.dp)
         )
     }
 }

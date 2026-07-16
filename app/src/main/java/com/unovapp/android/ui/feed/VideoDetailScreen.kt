@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
@@ -149,6 +150,17 @@ fun VideoDetailScreen(
             beyondBoundsPageCount = 1,
             modifier = Modifier.fillMaxSize()
         ) { page ->
+            // Même parallax inter-vidéos que le feed principal (profondeur au swipe).
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    val dist = pagerState.currentPage - page + pagerState.currentPageOffsetFraction
+                    val f = kotlin.math.abs(dist).coerceIn(0f, 1f)
+                    val s = 1f - 0.045f * f
+                    scaleX = s
+                    scaleY = s
+                    alpha = 1f - 0.22f * f
+                }
+            ) {
             FeedItem(
                 video = display[page],
                 isCurrentPage = page == pagerState.currentPage,
@@ -182,6 +194,7 @@ fun VideoDetailScreen(
                 isSelf = currentUserId != null && display[page].creatorId == currentUserId,
                 onOpenProfile = { creatorId -> if (creatorId.isNotBlank()) onOpenProfile(creatorId) }
             )
+            }
         }
 
         // Retour (haut-gauche) — chaque bouton a SA propre source d'interaction (en partager
