@@ -1,13 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Splash système (Android 12+) : le SYMBOLE de la marque (deux crochets entrelacés,
+    sarcelle + terracotta), converti depuis logo/symbol-color.svg.
+    Remplace l'ancienne icône « play » générique qui n'avait rien d'UNOVAPP.
+    Le contenu (26..74 du viewport 100) reste dans la zone sûre circulaire du masque splash.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FF6A00"
-        android:pathData="M54,20 C35.2,20 20,35.2 20,54 C20,72.8 35.2,88 54,88 C72.8,88 88,72.8 88,54 C88,35.2 72.8,20 54,20Z"/>
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M44,40 L44,68 L72,54 Z"/>
+    <group android:translateX="4" android:translateY="4">
+        <path
+            android:pathData="M26,52 L26,33 C26,28.6 28.6,26 33,26 L52,26"
+            android:strokeColor="#0E6B6B"
+            android:strokeWidth="14"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000"/>
+        <path
+            android:pathData="M74,48 L74,67 C74,71.4 71.4,74 67,74 L48,74"
+            android:strokeColor="#C65A2E"
+            android:strokeWidth="14"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000"/>
+    </group>
 </vector>
