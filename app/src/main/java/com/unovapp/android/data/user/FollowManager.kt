@@ -1,5 +1,6 @@
 package com.unovapp.android.data.user
 
+import com.unovapp.android.data.network.ApiError
 import com.unovapp.android.data.network.NetworkResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,9 +32,20 @@ class FollowManager @Inject constructor(
         store.setFollowing(id, follow) // optimiste
         scope.launch {
             val r = if (follow) userRepository.follow(id) else userRepository.unfollow(id)
-            if (r is NetworkResult.Failure) {
+            if (r is NetworkResult.Failure && !isAlreadyInDesiredState(r.error, follow)) {
                 store.setFollowing(id, !follow) // rollback
             }
         }
+    }
+
+    /**
+     * « Échec » qui signifie en réalité que le backend est DÉJÀ dans l'état voulu :
+     * 409 sur follow (« déjà suivi »), 404 sur unfollow (« relation inexistante »).
+     * Dans ces cas, faire un rollback ré-afficherait un bouton faux — l'état optimiste
+     * est le bon, on le garde.
+     */
+    private fun isAlreadyInDesiredState(error: ApiError, follow: Boolean): Boolean {
+        val status = (error as? ApiError.Business)?.httpStatus ?: return false
+        return (follow && status == 409) || (!follow && status == 404)
     }
 }

@@ -53,6 +53,8 @@ class FeedViewModel @Inject constructor(
     /** Estimation de débit partagée + persistée entre sessions — passée au pool de lecteurs. */
     val bandwidthMeter: BandwidthMeter,
     private val feedDiskCache: FeedDiskCache,
+    /** Pré-téléchargement des 1ʳᵉˢ secondes de vidéos dans le cache → démarrage instantané. */
+    private val prefetcher: com.unovapp.android.data.video.VideoPrefetcher,
     feedRefreshBus: FeedRefreshBus
 ) : ViewModel() {
 
@@ -69,13 +71,25 @@ class FeedViewModel @Inject constructor(
     /** Cache des profils créateurs résolus (id → pseudo + avatar_url). */
     private val creatorCache = mutableMapOf<String, Pair<String, String?>>()
 
+    /** Créateurs dont l'état de SUIVI a déjà été confirmé par le backend cette session. */
+    private val followSynced = mutableSetOf<String>()
+
     init {
-        viewModelScope.launch { _currentUserId.value = tokenStore.readUserId() }
+        viewModelScope.launch {
+            val uid = tokenStore.readUserId()
+            _currentUserId.value = uid
+            // Hydrate la liste de suivis persistée de CE compte → boutons corrects dès le
+            // démarrage, même si l'enrichment du feed est absent (token expiré, JWT optionnel).
+            followStore.onSession(uid)
+        }
         viewModelScope.launch {
             profileStore.profiles.collect { profiles ->
                 profiles.values.forEach { profile ->
                     creatorCache[profile.id] = profile.username to profile.avatarUrl
                     applyCreator(profile.id, profile.username, profile.avatarUrl)
+                    // Le profil visité porte l'état de suivi → on le verse dans le store au
+                    // lieu de le jeter (avant : seuls pseudo/avatar étaient récupérés).
+                    if (profile.isFollowing) followStore.merge(listOf(profile.id))
                 }
             }
         }
@@ -86,15 +100,20 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             val cached = feedDiskCache.load()
             if (cached.isNotEmpty()) {
+                // Le cache disque vient d'une session où le token était valide → son
+                // enrichment de suivi est fiable, on le récupère aussi.
+                mergeFollowEnrichment(cached)
+                val ordered = orderWarmFirst(cached.shuffled())
                 _state.update { s ->
                     if (s.videos.isEmpty()) {
-                        // Mélangé aussi : sinon le feed restauré rejoue le même ordre à chaque
-                        // ouverture (les 1ʳᵉˢ secondes de ces vidéos sont déjà en cache disque,
-                        // donc n'importe laquelle démarre instantanément).
-                        s.copy(isLoading = false, videos = cached.shuffled().map { dto -> dto.toUi() })
+                        // Mélangé + vidéos réchauffées en tête : le feed restauré démarre
+                        // instantanément (1ʳᵉˢ secondes déjà en cache disque) et sans répéter
+                        // le même ordre à chaque ouverture.
+                        s.copy(isLoading = false, videos = ordered.map { dto -> dto.toUi() })
                     } else s // le réseau a déjà répondu → il fait foi
                 }
                 resolveCreators()
+                triggerPrefetch(ordered)
             }
         }
         loadFeed()
@@ -124,12 +143,17 @@ class FeedViewModel @Inject constructor(
             .filter { it.isNotBlank() }
             .distinct()
         ids.forEach { id ->
-            creatorCache[id]?.let { (uname, avatar) ->
-                applyCreator(id, uname, avatar); return@forEach
-            }
+            // Identité (pseudo/avatar) depuis le cache si connue — affichage immédiat.
+            creatorCache[id]?.let { (uname, avatar) -> applyCreator(id, uname, avatar) }
+            // ⚠️ Le cache d'identité ne dispense PAS de synchroniser le SUIVI : avant, un
+            // créateur présent dans le cache (ex. via un profil visité) court-circuitait le
+            // GET /users/:id → son état de suivi n'était JAMAIS vérifié → bouton « Suivre »
+            // affiché à tort. On ne saute l'appel que si le suivi a déjà été confirmé.
+            if (creatorCache.containsKey(id) && id in followSynced) return@forEach
             viewModelScope.launch {
                 when (val r = userRepository.getUser(id)) {
                     is NetworkResult.Success -> {
+                        followSynced += id
                         val uname = r.data.username
                         val avatar = r.data.avatarUrl
                         creatorCache[id] = uname to avatar
@@ -166,27 +190,64 @@ class FeedViewModel @Inject constructor(
         _state.update { it.copy(currentPage = page.coerceAtLeast(0), currentVideoId = videoId) }
     }
 
+    /**
+     * Met en tête les vidéos DÉJÀ pré-téléchargées (démarrage instantané garanti), le reste
+     * derrière — chaque groupe conservant l'ordre reçu (déjà mélangé). Ainsi l'utilisateur
+     * tombe d'abord sur du contenu qui démarre sans attendre.
+     */
+    private fun orderWarmFirst(dtos: List<FeedVideoDto>): List<FeedVideoDto> {
+        if (dtos.isEmpty()) return dtos
+        val warm = prefetcher.warmIds()
+        if (warm.isEmpty()) return dtos
+        val (ready, rest) = dtos.partition { it.id in warm }
+        return ready + rest
+    }
+
+    /**
+     * Verse l'enrichment de suivi du feed (`is_following_creator`) dans le [FollowStore] —
+     * source de vérité UNIQUE des boutons. Positif seulement : un `false` peut venir d'une
+     * réponse non authentifiée (token expiré sur endpoint à JWT optionnel), il ne doit jamais
+     * écraser un suivi connu.
+     */
+    private fun mergeFollowEnrichment(dtos: List<FeedVideoDto>) {
+        followStore.merge(dtos.filter { it.isFollowingCreator }.map { it.creatorId })
+    }
+
+    /** Déclenche un préfetch (au plus 2) sur les vidéos pas encore réchauffées — fire-and-forget. */
+    private fun triggerPrefetch(dtos: List<FeedVideoDto>) {
+        val targets = dtos.mapNotNull { dto ->
+            dto.lowestRenditionUrl()?.let { url ->
+                com.unovapp.android.data.video.PrefetchTarget(dto.id, url)
+            }
+        }
+        if (targets.isEmpty()) return
+        viewModelScope.launch { runCatching { prefetcher.prefetch(targets, max = 2) } }
+    }
+
     fun loadFeed() {
         viewModelScope.launch {
             val rememberedVideoId = _state.value.currentVideoId
             _state.update { it.copy(isLoading = true) }
             when (val r = videoRepository.feed()) {
                 is NetworkResult.Success -> {
-                    // Ordre ALÉATOIRE (mesure d'attente avant l'algo backend) : sans ça, tous
-                    // les utilisateurs voient exactement la même liste dans le même ordre, et
-                    // retombent sur les mêmes vidéos à chaque ouverture.
-                    val shuffled = r.data.data.shuffled()
+                    // Ordre ALÉATOIRE (mesure d'attente avant l'algo backend) puis les vidéos
+                    // DÉJÀ pré-téléchargées remontées en tête → l'utilisateur voit d'abord du
+                    // contenu qui démarre instantanément.
+                    mergeFollowEnrichment(r.data.data)
+                    val ordered = orderWarmFirst(r.data.data.shuffled())
                     _state.update { it.copy(
                         isLoading    = false,
-                        videos       = shuffled.map { dto -> dto.toUi() },
+                        videos       = ordered.map { dto -> dto.toUi() },
                         nextCursor   = r.data.nextCursor,
                         hasMore      = r.data.hasMore,
-                        currentPage  = shuffled.indexOfFirst { it.id == rememberedVideoId }.takeIf { it >= 0 }
-                            ?: it.currentPage.coerceAtMost((shuffled.size - 1).coerceAtLeast(0))
+                        currentPage  = ordered.indexOfFirst { it.id == rememberedVideoId }.takeIf { it >= 0 }
+                            ?: it.currentPage.coerceAtMost((ordered.size - 1).coerceAtLeast(0))
                     )}
                     // Persiste la 1ʳᵉ page → démarrage instantané à la prochaine ouverture.
-                    feedDiskCache.save(shuffled)
+                    feedDiskCache.save(ordered)
                     resolveCreators()
+                    // ...et pendant qu'il regarde, on réchauffe 2 vidéos de plus.
+                    triggerPrefetch(ordered)
                 }
                 // Échec réseau : on garde ce qui est affiché (souvent le cache disque).
                 // Si la liste est vide, FeedScreen montre l'état erreur + « Réessayer » —
@@ -204,22 +265,22 @@ class FeedViewModel @Inject constructor(
             _state.update { it.copy(isLoadingMore = true) }
             when (val r = videoRepository.feed(cursor = cursor)) {
                 is NetworkResult.Success -> {
+                    mergeFollowEnrichment(r.data.data)
+                    // Mélange la page suivante ET écarte les doublons : le backend paginant
+                    // sur une liste non personnalisée, une même vidéo peut revenir.
+                    val known = _state.value.videos.mapTo(HashSet()) { it.id }
+                    val freshDtos = r.data.data.filter { it.id !in known }.shuffled()
                     _state.update { st ->
-                        // Mélange la page suivante ET écarte les doublons : le backend paginant
-                        // sur une liste non personnalisée, une même vidéo peut revenir.
-                        val known = st.videos.mapTo(HashSet()) { it.id }
-                        val fresh = r.data.data
-                            .filter { it.id !in known }
-                            .shuffled()
-                            .map { dto -> dto.toUi() }
                         st.copy(
                             isLoadingMore = false,
-                            videos        = st.videos + fresh,
+                            videos        = st.videos + freshDtos.map { dto -> dto.toUi() },
                             nextCursor    = r.data.nextCursor,
                             hasMore       = r.data.hasMore
                         )
                     }
                     resolveCreators()
+                    // Réchauffe aussi quelques vidéos de la nouvelle page.
+                    triggerPrefetch(freshDtos)
                 }
                 is NetworkResult.Failure -> _state.update { it.copy(isLoadingMore = false) }
             }

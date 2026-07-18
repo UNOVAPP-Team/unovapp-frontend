@@ -162,8 +162,11 @@ fun FeedItem(
         // Cœur par défaut pour une vidéo déjà likée (sans écraser un sticker explicite persisté).
         if (video.isLiked) ReactionMemory.setDefault(video.id, Reaction.Love)
     }
-    // Reflète le store partagé : un suivi reste affiché tant que la session vit.
-    val followed = isFollowing || video.isFollowing
+    // SOURCE UNIQUE : le FollowStore partagé (persisté, alimenté par l'enrichment du feed,
+    // les profils visités et les listes d'abonnements). L'ancien `|| video.isFollowing`
+    // créait une 2ᵉ source de vérité figée : un désabonnement fait depuis le profil restait
+    // affiché « Suivi » dans le feed, et les divergences étaient invisibles.
+    val followed = isFollowing
     var captionExpanded by remember(video.id) { mutableStateOf(false) }
     val progress = playbackProgress
     var moreOpen by remember(video.id) { mutableStateOf(false) }

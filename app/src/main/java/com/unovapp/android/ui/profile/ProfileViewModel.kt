@@ -149,6 +149,9 @@ class ProfileViewModel @Inject constructor(
         _state.update { it.copy(isLoading = true, error = null) }
         when (val r = userRepository.fetchMe()) {
             is NetworkResult.Success -> {
+                // Hydrate/re-hydrate la liste de suivis persistée de CE compte (gère aussi le
+                // changement de compte dans le même processus).
+                followStore.onSession(r.data.id)
                 followStore.resetDelta()
                 selfStatsStore.reset()   // les likes reçus autoritatifs sont dans r.data
                 _state.update { it.copy(isLoading = false, profile = r.data, error = null) }
@@ -319,6 +322,9 @@ class ProfileViewModel @Inject constructor(
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch {
             authRepository.logout()
+            // Vide l'état de suivi en mémoire : rien ne doit fuiter vers le prochain compte
+            // connecté dans ce même processus (la persistance est par utilisateur).
+            followStore.onSession(null)
             onDone()
         }
     }
