@@ -23,8 +23,8 @@ android {
         applicationId = "com.unovapp.android"
         minSdk = 24
         targetSdk = 35
-        versionCode = 12
-        versionName = "2.1"
+        versionCode = 13
+        versionName = "2.2"
 
         // Passerelle unique (VPS Hostinger, Frankfurt). Un reverse proxy Nginx route en
         // interne vers auth/user/social/video selon le chemin. Depuis le 2026-06-26, plus
