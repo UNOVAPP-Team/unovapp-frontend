@@ -39,7 +39,11 @@ class PrefetchStore @Inject constructor(@ApplicationContext context: Context) {
 
     private companion object {
         const val PREFS = "video_prefetch"
-        const val KEY = "warm_ids"
+        // « _full » : la sémantique est passée de « premières secondes en cache » à « vidéo
+        // ENTIÈRE en cache ». Nouvelle clé → les entrées partielles de l'ancienne version sont
+        // oubliées et les vidéos re-sélectionnées pour être complétées (CacheWriter ne
+        // re-télécharge que ce qui manque).
+        const val KEY = "warm_ids_full"
         const val SEP = ","
         const val CAP = 80
     }
