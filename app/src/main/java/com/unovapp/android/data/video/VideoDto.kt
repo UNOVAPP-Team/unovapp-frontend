@@ -31,6 +31,18 @@ data class FeedVideoDto(
     }
 
     /**
+     * Rendition la PLUS LÉGÈRE (144p/240p) — c'est celle sur laquelle l'ABR démarre (estimation
+     * de débit pessimiste au 1ᵉʳ lancement). Cible idéale du **préfetch en arrière-plan** :
+     * réchauffer ces segments dans le cache garantit un démarrage instantané au minimum de
+     * données. Null si la vidéo n'a aucune rendition (mock).
+     */
+    fun lowestRenditionUrl(): String? {
+        val order = listOf("144p", "240p", "360p", "480p", "720p", "1080p")
+        for (q in order) renditions[q]?.let { return it }
+        return renditions.values.firstOrNull()
+    }
+
+    /**
      * URL de LECTURE pour ExoPlayer. Le backend n'expose pas de master playlist (juste des
      * renditions séparées) et l'app forçait la plus haute → démarrage lent + saccades sur
      * réseau faible. Ici on **synthétise une master playlist multivariant** embarquée en

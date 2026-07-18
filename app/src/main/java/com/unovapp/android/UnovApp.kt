@@ -7,6 +7,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.unovapp.android.data.video.FeedPrefetchWorker
 import com.unovapp.android.notif.ActivityPollWorker
 import com.unovapp.android.notif.Notifs
 import com.unovapp.android.ui.feed.ReactionMemory
@@ -29,7 +30,29 @@ class UnovApp : Application() {
         Notifs.createChannels(this)
         ReactionMemory.init(this)
         scheduleActivityPolling()
+        scheduleFeedPrefetch()
         warmUpBackends()
+    }
+
+    /**
+     * Planifie le pré-téléchargement périodique de quelques vidéos (au plus 2) dans le cache,
+     * **même app fermée**, dès qu'il y a du réseau (contrainte `CONNECTED`). But : présenter à
+     * l'ouverture des vidéos déjà bufferisées = démarrage instantané.
+     *
+     * Intervalle minimal WorkManager = 15 min ; l'app déclenche en plus un préfetch immédiat à
+     * chaque chargement du feed (FeedViewModel) pour l'immédiateté quand elle est ouverte.
+     */
+    private fun scheduleFeedPrefetch() {
+        val request = PeriodicWorkRequestBuilder<FeedPrefetchWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            )
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            FeedPrefetchWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 
     /**
