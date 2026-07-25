@@ -23,9 +23,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.res.stringResource
 import com.unovapp.android.R
 import androidx.compose.ui.Alignment
@@ -82,7 +85,9 @@ fun BottomNav(
     active: MainTab,
     onTabChange: (MainTab) -> Unit,
     onCreate: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Nombre de notifications non lues → badge sur l'onglet Inbox (0 = masqué). */
+    inboxUnread: Int = 0
 ) {
     Box(
         modifier = modifier
@@ -107,7 +112,7 @@ fun BottomNav(
             NavPill(tab = MainTab.Feed, active = active, onClick = onTabChange)
             NavPill(tab = MainTab.Search, active = active, onClick = onTabChange)
             CreateButton(onClick = onCreate)
-            NavPill(tab = MainTab.Inbox, active = active, onClick = onTabChange)
+            NavPill(tab = MainTab.Inbox, active = active, onClick = onTabChange, badgeCount = inboxUnread)
             NavPill(tab = MainTab.Profile, active = active, onClick = onTabChange)
         }
     }
@@ -121,7 +126,8 @@ fun BottomNav(
 private fun NavPill(
     tab: MainTab,
     active: MainTab,
-    onClick: (MainTab) -> Unit
+    onClick: (MainTab) -> Unit,
+    badgeCount: Int = 0
 ) {
     val isActive = tab == active
     val label = stringResource(tab.labelRes)
@@ -152,12 +158,21 @@ private fun NavPill(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Icon(
-            imageVector = tab.icon,
-            contentDescription = label,
-            tint = tint,
-            modifier = Modifier.size(24.dp)
-        )
+        // L'icône dans un Box pour ancrer le badge en haut-droite qui déborde légèrement.
+        Box {
+            Icon(
+                imageVector = tab.icon,
+                contentDescription = label,
+                tint = tint,
+                modifier = Modifier.size(24.dp)
+            )
+            NotificationBadge(
+                count = badgeCount,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 7.dp, y = (-6).dp)
+            )
+        }
         if (isActive) {
             Text(
                 text = label,
@@ -165,6 +180,51 @@ private fun NavPill(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.2.sp,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/**
+ * Badge de comptage des notifications non lues — pastille rouge à contour sombre, posée en
+ * haut-droite de l'icône Inbox. Comportement moderne :
+ *  - masqué quand 0, apparition/disparition en scale spring (AnimatedVisibility) ;
+ *  - **pop** à chaque changement de valeur (nouvelle notification) pour attirer l'œil ;
+ *  - « 99+ » au-delà de 99 ; forme pilule qui s'élargit à partir de 2 chiffres.
+ * Le contour dans la couleur du fond de la nav détache nettement le badge de l'icône.
+ */
+@Composable
+private fun NotificationBadge(count: Int, modifier: Modifier = Modifier) {
+    AnimatedVisibility(
+        visible = count > 0,
+        enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
+        exit = scaleOut(tween(150)) + fadeOut(tween(150)),
+        modifier = modifier
+    ) {
+        // Pop à chaque incrément (une notif de plus arrive → le badge « tressaute »).
+        val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+        androidx.compose.runtime.LaunchedEffect(count) {
+            pop.snapTo(0.6f)
+            pop.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+        }
+        val text = if (count > 99) "99+" else count.toString()
+        Box(
+            modifier = Modifier
+                .scale(pop.value)
+                .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(UnovColors.Danger)
+                .border(1.5.dp, Color(0xFF141414), RoundedCornerShape(999.dp))
+                .padding(horizontal = if (text.length > 1) 4.dp else 0.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.sp,
                 maxLines = 1
             )
         }

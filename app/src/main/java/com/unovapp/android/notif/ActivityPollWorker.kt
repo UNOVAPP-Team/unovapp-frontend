@@ -30,6 +30,7 @@ class ActivityPollWorker(
     interface Deps {
         fun notificationRepository(): NotificationRepository
         fun tokenStore(): TokenDataStore
+        fun unreadStore(): com.unovapp.android.data.notification.UnreadNotificationsStore
     }
 
     override suspend fun doWork(): Result {
@@ -43,6 +44,8 @@ class ActivityPollWorker(
 
         return when (val r = deps.notificationRepository().list()) {
             is NetworkResult.Success -> {
+                // Badge de la bottom bar frais même si ce poll tourne alors que l'app est ouverte.
+                deps.unreadStore().set(r.data.unreadCount)
                 val items = r.data.data
                 if (items.isEmpty()) return Result.success()
 

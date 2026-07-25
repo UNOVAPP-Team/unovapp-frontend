@@ -31,7 +31,8 @@ data class NotificationsState(
 class NotificationsViewModel @Inject constructor(
     private val repository: NotificationRepository,
     private val videoRepository: com.unovapp.android.data.video.VideoRepository,
-    private val tokenStore: com.unovapp.android.TokenDataStore
+    private val tokenStore: com.unovapp.android.TokenDataStore,
+    private val unreadStore: com.unovapp.android.data.notification.UnreadNotificationsStore
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NotificationsState())
@@ -50,14 +51,18 @@ class NotificationsViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
             when (val r = repository.list()) {
-                is NetworkResult.Success -> _state.update {
-                    it.copy(
-                        isLoading = false,
-                        items = r.data.data.withoutSelf(),
-                        nextCursor = r.data.nextCursor,
-                        hasMore = r.data.hasMore,
-                        unreadCount = r.data.unreadCount
-                    )
+                is NetworkResult.Success -> {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            items = r.data.data.withoutSelf(),
+                            nextCursor = r.data.nextCursor,
+                            hasMore = r.data.hasMore,
+                            unreadCount = r.data.unreadCount
+                        )
+                    }
+                    // Valeur autoritative → alimente le badge de la bottom bar.
+                    unreadStore.set(r.data.unreadCount)
                 }
                 is NetworkResult.Failure -> _state.update {
                     it.copy(isLoading = false, error = r.error.userMessage)
@@ -120,11 +125,13 @@ class NotificationsViewModel @Inject constructor(
                 unreadCount = (s.unreadCount - 1).coerceAtLeast(0)
             )
         }
+        unreadStore.decrement()   // badge de la bottom bar en direct
         viewModelScope.launch { repository.markRead(id) }
     }
 
     fun markAllRead() {
         _state.update { s -> s.copy(items = s.items.map { it.copy(isRead = true) }, unreadCount = 0) }
+        unreadStore.clear()       // badge de la bottom bar en direct
         viewModelScope.launch { repository.markAllRead() }
     }
 }

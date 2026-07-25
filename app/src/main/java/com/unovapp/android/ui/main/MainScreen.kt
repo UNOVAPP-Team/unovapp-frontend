@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +83,18 @@ fun MainScreen(
 ) {
     UnovAppTheme {
         val context = LocalContext.current
+        // Badge Inbox : compteur non-lu partagé, rafraîchi à chaque retour au premier plan.
+        val badgeVm: com.unovapp.android.ui.notifications.NotificationBadgeViewModel =
+            androidx.hilt.navigation.compose.hiltViewModel()
+        val inboxUnread by badgeVm.unread.collectAsStateWithLifecycle()
+        val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) badgeVm.refresh()
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
         var tab by rememberSaveable { mutableStateOf(MainTab.Feed) }
         val tabHistory = remember { mutableStateListOf<MainTab>() }
         var overlay by remember { mutableStateOf<Overlay?>(null) }
@@ -199,6 +212,7 @@ fun MainScreen(
                 active = tab,
                 onTabChange = { navigateToTab(it) },
                 onCreate = { showCreate = true },
+                inboxUnread = inboxUnread,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
 
