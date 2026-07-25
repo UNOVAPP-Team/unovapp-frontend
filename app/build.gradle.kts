@@ -17,14 +17,14 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "com.unovapp.android"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.unovapp.android"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 13
-        versionName = "2.2"
+        targetSdk = 36
+        versionCode = 14
+        versionName = "2.3"
 
         // Passerelle unique (VPS Hostinger, Frankfurt). Un reverse proxy Nginx route en
         // interne vers auth/user/social/video selon le chemin. Depuis le 2026-06-26, plus
@@ -37,11 +37,14 @@ android {
         buildConfigField("String", "USER_BASE_URL", gatewayBaseUrl)
         buildConfigField("String", "SOCIAL_BASE_URL", gatewayBaseUrl)
         buildConfigField("String", "VIDEO_BASE_URL", gatewayBaseUrl)
-        // TODO: remplacer par le vrai Web Client ID Google OAuth quand le backend exposera /auth/google.
+        // Web Client ID OAuth 2.0 du projet Google Cloud d'UNOVAPP (audience vérifiée côté
+        // backend par /auth/google). ⚠️ Le projet Google Cloud doit aussi déclarer un client
+        // OAuth « Android » (package com.unovapp.android + empreintes SHA-1 debug/upload/Play)
+        // sinon Play Services refuse d'émettre l'id_token.
         buildConfigField(
             "String",
             "GOOGLE_WEB_CLIENT_ID",
-            "\"REPLACE_ME.apps.googleusercontent.com\""
+            "\"151191236733-77b4k31smn6ohrih95gkfk9fbd8civ9d.apps.googleusercontent.com\""
         )
         buildConfigField("boolean", "USE_STUB_AUTH", "false")
     }

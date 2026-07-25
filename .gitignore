@@ -25,3 +25,6 @@ Thumbs.db
 
 # Claude / editor state
 .claude/
+
+# Captures d'écran (deliverables locaux, pas de binaires dans le repo)
+captures_ecrans/
