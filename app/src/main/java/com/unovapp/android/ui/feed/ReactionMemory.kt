@@ -46,4 +46,10 @@ object ReactionMemory {
     fun setDefault(videoId: String, reaction: Reaction) {
         if (map[videoId] == null) map[videoId] = reaction
     }
+
+    /** Efface toutes les réactions (mémoire + disque) — déconnexion. */
+    fun clearAll() {
+        map.clear()
+        prefs?.edit()?.clear()?.apply()
+    }
 }

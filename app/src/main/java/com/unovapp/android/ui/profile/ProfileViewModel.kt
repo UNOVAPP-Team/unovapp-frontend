@@ -83,6 +83,7 @@ class ProfileViewModel @Inject constructor(
     private val followStore: FollowStore,
     private val selfStatsStore: SelfStatsStore,
     private val tokenStore: com.unovapp.android.TokenDataStore,
+    private val sessionCleaner: com.unovapp.android.data.SessionCleaner,
     feedRefreshBus: FeedRefreshBus
 ) : ViewModel() {
 
@@ -318,13 +319,14 @@ class ProfileViewModel @Inject constructor(
 
     fun clearAvatarError() = _avatarState.update { it.copy(error = null) }
 
-    /** Déconnexion : efface la session (best-effort backend) puis notifie l'UI. */
+    /**
+     * Déconnexion : invalide la session côté backend (best-effort) puis EFFACE TOUTE trace
+     * locale via [SessionCleaner] — l'appareil revient à l'état « jamais connecté ».
+     */
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch {
-            authRepository.logout()
-            // Vide l'état de suivi en mémoire : rien ne doit fuiter vers le prochain compte
-            // connecté dans ce même processus (la persistance est par utilisateur).
-            followStore.onSession(null)
+            authRepository.logout()   // logout serveur + purge des tokens
+            sessionCleaner.wipe()     // graphe de suivi, feed, réactions, badge, workers…
             onDone()
         }
     }

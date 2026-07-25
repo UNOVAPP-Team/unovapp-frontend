@@ -24,4 +24,9 @@ class UserProfileStore @Inject constructor() {
             current + items.associateBy { it.id }
         }
     }
+
+    /** Vide le cache de profils en mémoire (déconnexion). */
+    fun clear() {
+        _profiles.value = emptyMap()
+    }
 }

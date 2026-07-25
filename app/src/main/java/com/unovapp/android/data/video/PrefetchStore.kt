@@ -34,6 +34,12 @@ class PrefetchStore @Inject constructor(@ApplicationContext context: Context) {
         prefs.edit().putString(KEY, list.joinToString(SEP)).apply()
     }
 
+    /** Oublie toutes les vidéos réchauffées (déconnexion). */
+    @Synchronized
+    fun clear() {
+        prefs.edit().clear().apply()
+    }
+
     private fun read(): List<String> =
         prefs.getString(KEY, "").orEmpty().split(SEP).filter { it.isNotBlank() }
 

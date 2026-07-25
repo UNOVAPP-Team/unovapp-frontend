@@ -94,6 +94,18 @@ class FollowStore @Inject constructor(@ApplicationContext context: Context) {
         _followingDelta.value = 0
     }
 
+    /**
+     * Efface TOUT le graphe de suivi persisté (tous comptes confondus) + l'état en mémoire.
+     * Appelé à la déconnexion : aucune trace ne doit rester sur l'appareil.
+     */
+    @Synchronized
+    fun clearAllPersisted() {
+        prefs.edit().clear().apply()
+        sessionUserId = null
+        _following.value = emptySet()
+        _followingDelta.value = 0
+    }
+
     private fun persist() {
         val id = sessionUserId ?: return
         prefs.edit().putStringSet(key(id), _following.value).apply()

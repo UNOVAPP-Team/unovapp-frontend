@@ -40,4 +40,9 @@ class FeedDiskCache @Inject constructor(@ApplicationContext context: Context) {
             runCatching { file.writeText(gson.toJson(videos)) }
         }
     }
+
+    /** Efface le feed persisté (déconnexion — aucune trace ne doit rester sur l'appareil). */
+    suspend fun clear() {
+        withContext(Dispatchers.IO) { runCatching { file.delete() } }
+    }
 }
