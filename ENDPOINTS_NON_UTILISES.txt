@@ -1,0 +1,92 @@
+================================================================================
+  UNOVAPP — ENDPOINTS DOCUMENTÉS MAIS NON UTILISÉS PAR L'APP
+  Audit du 2026-07-24 (app v2.3)
+  Méthode : diff automatique entre les endpoints des guides frontend et les
+  appels réels dans les interfaces Retrofit (data/*/*.kt) + OkHttp brut.
+================================================================================
+
+CONCLUSION EN UNE PHRASE :
+  L'app utilise QUASIMENT TOUS les endpoints exposés par le backend. Le diff n'a
+  remonté que 4 cas, et après vérification ce sont tous des FAUX POSITIFS
+  (même fonction appelée autrement, ou contournée volontairement).
+
+
+--------------------------------------------------------------------------------
+CAS SIGNALÉS PAR LE DIFF — ET LEUR RÉALITÉ
+--------------------------------------------------------------------------------
+
+1) GET /videos/:id/manifest
+   -> NON APPELÉ, ET C'EST VOULU.
+   L'app ne demande pas la master playlist du backend : elle la SYNTHÉTISE
+   elle-même à partir du champ "renditions" (144p/240p/480p) pour faire de l'ABR
+   qui démarre sur la rendition la plus légère (démarrage quasi instantané).
+   Ce manifest ne sert que de repli de dernier recours dans bestStreamUrl().
+   -> Aucune action nécessaire. C'est un choix de performance.
+
+2) GET /auth/me
+   -> FAUX POSITIF. L'app appelle POST /auth/me (le backend documente les deux
+      formes ; la fonction "qui suis-je" est bien utilisée).
+
+3) PATCH /users/me
+   -> FAUX POSITIF. L'édition de profil passe par PATCH /users/{id} en utilisant
+      son propre id. Même effet.
+
+4) PATCH /videos/upload/:uploadID
+   -> FAUX POSITIF. Il EST utilisé, mais en OkHttp brut (upload TUS par chunks
+      dans VideoRepository, pas en annotation Retrofit) — c'est pour ça qu'il
+      n'apparaissait pas dans le scan des annotations.
+
+
+--------------------------------------------------------------------------------
+DONC : ENDPOINTS RÉELLEMENT INUTILISÉS
+--------------------------------------------------------------------------------
+  -> AUCUN endpoint documenté n'est réellement laissé de côté par oubli.
+     Le seul non-appelé (GET /videos/:id/manifest) l'est par choix de conception.
+
+
+--------------------------------------------------------------------------------
+POUR MÉMOIRE — CE QUI N'EST PAS "UN ENDPOINT INUTILISÉ" MAIS "UN ENDPOINT
+QUI N'EXISTE PAS ENCORE" (donc l'app fait sans, ou attend) :
+--------------------------------------------------------------------------------
+  - Enregistrement de device token FCM : n'existe pas (push en simulation).
+    L'app compense par du polling. (voir A_ENVOYER_PAR_LE_BACKEND.txt, point 9)
+  - Wallet / jetons, Cadeaux, Challenges, Battle : aucun endpoint backend.
+    Écrans placeholders côté app. (voir A_ENVOYER_PAR_LE_BACKEND.txt, point 10)
+
+
+--------------------------------------------------------------------------------
+SURFACE COMPLÈTE RÉELLEMENT CÂBLÉE DANS L'APP (pour référence)
+--------------------------------------------------------------------------------
+AUTH :
+  POST auth/register, auth/login, auth/logout, auth/refresh, auth/me,
+  auth/google, auth/forgot-password, auth/reset-password, auth/send-otp,
+  auth/verify-otp, auth/verify-email, auth/send-phone-otp, auth/verify-phone,
+  auth/change-email, auth/verify-email-change
+  PATCH auth/change-password
+  GET auth/sessions   DELETE auth/sessions/{id}
+
+USERS :
+  GET users/me, users/{id}, users/{id}/followers, users/{id}/following,
+  users/{id}/videos, users/search, users/check, users/me/interests,
+  users/me/liked, users/me/saved
+  PATCH users/{id}    POST users/{id}/follow   DELETE users/{id}/follow
+  POST users/{id}/block   DELETE users/{id}/block   DELETE users/me
+  POST users/me/interests
+  POST users/me/avatar/presign   PUT users/me/avatar
+  POST users/me/cover/presign    PUT users/me/cover
+
+VIDEOS :
+  GET feed, videos/{id}, videos/{id}/comments, videos/{id}/related,
+  hashtags/{name}/videos, search
+  POST videos/upload   PATCH videos/upload/{uploadId} (TUS, OkHttp)
+  POST videos/{id}/like, videos/{id}/save, videos/{id}/share, videos/{id}/view,
+  videos/{id}/report, videos/{id}/comments
+  POST videos/{id}/comments/{commentId}/like, .../report
+  PATCH videos/{id}, videos/{id}/comments/{commentId}/pin
+  DELETE videos/{id}, videos/{id}/comments/{commentId}
+  POST videos/{id}/thumbnail/presign   PUT videos/{id}/thumbnail
+
+NOTIFICATIONS :
+  GET notifications   PATCH notifications/{id}/read   POST notifications/read-all
+
+================================================================================

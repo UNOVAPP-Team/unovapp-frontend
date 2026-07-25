@@ -247,7 +247,8 @@ fun AuthScreen(
                             when (step) {
                                 AuthStep.Welcome -> WelcomeStep(
                                     onChooseLogin = { viewModel.chooseMode(AuthMode.Login) },
-                                    onChooseRegister = { viewModel.chooseMode(AuthMode.Register) }
+                                    onChooseRegister = { viewModel.chooseMode(AuthMode.Register) },
+                                    onGoogle = { viewModel.signInWithGoogle(context) }
                                 )
                                 AuthStep.Form -> FormStep(
                                     state = state,
@@ -446,7 +447,8 @@ private fun Cta(state: AuthUiState, onSubmit: () -> Unit) {
 @Composable
 private fun WelcomeStep(
     onChooseLogin: () -> Unit,
-    onChooseRegister: () -> Unit
+    onChooseRegister: () -> Unit,
+    onGoogle: () -> Unit
 ) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         RotatingGreeting()
@@ -486,8 +488,30 @@ private fun WelcomeStep(
             onClick = onChooseLogin
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
+        // Séparateur « ou »
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.padding(bottom = 14.dp)
+        ) {
+            Box(modifier = Modifier.weight(1f).height(1.dp).background(UnovColors.Line))
+            Text(
+                text = "ou",
+                color = UnovColors.TextMute,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Box(modifier = Modifier.weight(1f).height(1.dp).background(UnovColors.Line))
+        }
+
+        // Connexion Google — désormais fonctionnelle (Client ID configuré) : dès l'accueil.
+        GoogleButton(onClick = onGoogle)
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Méthodes réellement à venir (sans endpoint backend prêt).
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -508,7 +532,6 @@ private fun WelcomeStep(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SsoTile(icon = Icons.Outlined.AlternateEmail, label = "Google", modifier = Modifier.weight(1f), enabled = false)
             SsoTile(icon = Icons.Outlined.MailOutline, label = "Lien email", modifier = Modifier.weight(1f), enabled = false)
             SsoTile(icon = Icons.Outlined.Sms, label = "OTP SMS", modifier = Modifier.weight(1f), enabled = false)
         }

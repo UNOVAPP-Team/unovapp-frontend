@@ -1,0 +1,140 @@
+================================================================================
+  UNOVAPP — CE QUE L'ÉQUIPE BACKEND DOIT FOURNIR / CORRIGER
+  Pour que l'application fonctionne pleinement.  (état au 2026-07-24, app v2.3)
+================================================================================
+
+Légende de priorité :
+  [CRITIQUE]  bloque une fonctionnalité ou la sécurité — à traiter en premier
+  [IMPORTANT] dégrade fortement l'expérience — à planifier vite
+  [PLUS TARD] amélioration ou fonctionnalité future
+
+
+--------------------------------------------------------------------------------
+1. [CRITIQUE] GOOGLE SIGN-IN — configuration Google Cloud
+--------------------------------------------------------------------------------
+Le Web Client ID est branché dans l'app :
+    151191236733-77b4k31smn6ohrih95gkfk9fbd8civ9d.apps.googleusercontent.com
+
+Pour que la connexion Google marche RÉELLEMENT à l'exécution, dans le MÊME projet
+Google Cloud, il faut :
+
+  a) Confirmer que la variable d'environnement du service auth (celle vérifiée par
+     POST /auth/google) contient bien CE Web Client ID (même audience), sinon le
+     backend rejettera tous les id_token avec un 401.
+
+  b) Créer un client OAuth de type "Android" avec :
+        - Nom du package : com.unovapp.android
+        - Empreintes SHA-1 (les 3) :
+            DEBUG   (tests) : 96:3D:C9:14:7E:F3:F3:32:29:35:C6:49:1A:C5:D5:72:A3:DF:47:CD
+            UPLOAD  (AAB)   : 95:99:C5:99:15:D8:02:91:10:7F:7F:C8:51:3D:32:7B:11:79:83:41
+            PLAY APP SIGNING: (à récupérer dans Play Console > Configuration >
+                               Intégrité de l'application, après le 1er upload)
+     Sans ce client Android, Google Play Services refuse d'émettre l'id_token sur
+     le téléphone, même avec le bon Web Client ID.
+
+  À NOUS RENVOYER : confirmation que (a) est fait + la valeur exacte du
+  GOOGLE_CLIENT_ID configurée côté serveur (pour double-vérification).
+
+
+--------------------------------------------------------------------------------
+3. [CRITIQUE] CACHE-CONTROL sur les objets vidéo (1 ligne, gros gain de fluidité)
+--------------------------------------------------------------------------------
+Les segments sont servis avec Cache-Control: no-cache -> Cloudflare (déjà devant
+Supabase, gratuit) ne met JAMAIS les vidéos en cache : chaque vue repaye l'origine
+bridée (~100 Ko/s, segment de 720 Ko = ~7 s).
+Correctif : à l'upload des .ts / .m3u8 / miniatures, passer cacheControl = "31536000"
+(les vidéos sont immuables). Détails + commande de vérif (MISS -> HIT) dans :
+    docs/BACKEND_VIDEO_DELIVERY.md
+
+
+--------------------------------------------------------------------------------
+4. [CRITIQUE] DOMAINE + TLS (HTTPS)
+--------------------------------------------------------------------------------
+Toute l'API passe en HTTP clair sur une IP (152.239.118.90). Les tokens JWT et
+mots de passe transitent EN CLAIR (interceptables sur un WiFi public).
+À faire : nom de domaine + certificat SSL, puis on retire l'exception cleartext de
+res/xml/network_security_config.xml. Débloque aussi HTTP/2/3 et le passage à un CDN.
+
+
+--------------------------------------------------------------------------------
+5. [IMPORTANT] ALGORITHME DE FEED (personnalisation)
+--------------------------------------------------------------------------------
+GET /feed?type=foryou renvoie la MÊME liste à tout le monde, et remontre les vidéos
+déjà vues. L'app envoie déjà tous les signaux (vues avec watched_seconds/total_seconds,
+likes, partages, sauvegardes). Étapes détaillées (SQL inclus) dans :
+    docs/BACKEND_FEED_ALGO.md
+Minimum vital (étape 1) : exclure du feed les vidéos déjà vues + les vidéos de
+l'utilisateur lui-même.
+
+
+--------------------------------------------------------------------------------
+6. [IMPORTANT] LADDER D'ENCODAGE 720p / 1080p
+--------------------------------------------------------------------------------
+Le transcodage plafonne à 480p (~900 kbps) : c'est le plafond de qualité de toute
+la plateforme. L'app filme et uploade déjà en 1080p. Ajouter les renditions 720p
+(~2,2 Mbps) et 1080p (~4 Mbps). L'app les prendra automatiquement (ABR). Détails
+(bitrates + commande ffmpeg) dans docs/BACKEND_VIDEO_DELIVERY.md section 4.
+NB : dépend du point 3 (sans CDN, personne n'a le débit pour du 720p).
+
+
+--------------------------------------------------------------------------------
+7. [IMPORTANT] NOTIFICATIONS — champs manquants dans le payload
+--------------------------------------------------------------------------------
+  a) actor_id : l'auteur de l'action. Aujourd'hui absent -> l'app filtre "mes propres
+     activités" (quand je like ma propre vidéo) en comparant le pseudo en début de
+     titre, ce qui est fragile. Mieux : ne PAS créer la notification quand
+     actor_id == creator_id, OU exposer actor_id pour un filtrage fiable côté client.
+
+  b) reaction : le type de réaction dans data (ex. "love", "haha", "wow", "sad",
+     "care"...). L'app sait déjà afficher l'emoji correspondant si ce champ arrive.
+
+
+--------------------------------------------------------------------------------
+8. [IMPORTANT] TYPE DE RÉACTION sur POST /videos/:id/like
+--------------------------------------------------------------------------------
+Le like est booléen côté backend. L'app propose 7 réactions (J'aime, J'adore, Fou
+rire, Solidaire, Wouah, Triste, Bravo) mais ne peut mémoriser le TYPE que localement
+(il ne survit pas au changement d'appareil). Ajouter un champ reaction_type au corps
+du like (+ le renvoyer dans le feed) rendrait les réactions persistantes et partagées.
+
+
+--------------------------------------------------------------------------------
+9. [PLUS TARD] PUSH FCM TEMPS RÉEL
+--------------------------------------------------------------------------------
+Aujourd'hui : FCM_PROJECT_ID vide (push en simulation) et AUCUN endpoint
+d'enregistrement de device token. L'app compense par du polling (toutes les 15 min).
+Pour du push temps réel : renseigner FCM_PROJECT_ID + créer un endpoint
+d'enregistrement de token (ex. POST /notifications/register-device { token, platform }).
+
+
+--------------------------------------------------------------------------------
+10. [PLUS TARD] FONCTIONNALITÉS SANS AUCUN ENDPOINT BACKEND
+--------------------------------------------------------------------------------
+Ces écrans existent dans l'app mais sont des placeholders locaux, faute d'API :
+  - WALLET / JETONS : solde purement local. Besoin de GET/POST solde, dépense,
+    recharge (Mobile Money).
+  - CADEAUX (gifts) : compteur local optimiste, non persisté.
+  - CHALLENGES : écran de création prêt côté app. Endpoints à créer -> spec dans
+    docs/BACKEND_CHALLENGES.md
+  - BATTLE : non implémenté.
+
+
+--------------------------------------------------------------------------------
+11. [PETIT PLUS] User-Agent parlant pour l'écran "Sessions"
+--------------------------------------------------------------------------------
+GET /auth/sessions affiche device_info = User-Agent envoyé à la connexion.
+Actuellement c'est le défaut "okhttp/4.12.0" -> l'utilisateur ne reconnaît pas ses
+appareils. (Amélioration côté app, mais à valider : l'app enverra un User-Agent du
+type "UNOVAPP-Android/2.3 (SM-A155F)".)
+
+
+================================================================================
+  RÉCAP — CE QU'ON ATTEND CONCRÈTEMENT DE VOUS, DANS L'ORDRE :
+    1) Client OAuth Android (SHA-1 ci-dessus) + confirmation du GOOGLE_CLIENT_ID
+    2) Réparer GET /users/:id/videos (renvoie vide)
+    3) cacheControl "31536000" à l'upload des objets vidéo
+    4) Domaine + TLS (HTTPS)
+    5) Feed : au minimum exclure les vidéos déjà vues
+    6) Renditions 720p/1080p
+    7) actor_id + reaction dans le payload notifications
+================================================================================
