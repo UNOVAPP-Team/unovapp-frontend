@@ -48,6 +48,7 @@ fun GoldPrimaryButton(
             .alpha(if (effectiveEnabled) 1f else 0.45f)
             .clip(RoundedCornerShape(14.dp))
             .background(UnovGradients.Gold)
+            .goldShimmer(enabled = effectiveEnabled)
             .clickable(
                 interactionSource = interaction,
                 indication = null,

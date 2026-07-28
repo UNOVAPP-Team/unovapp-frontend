@@ -39,11 +39,13 @@ import com.unovapp.android.ui.theme.UnovColors
 /**
  * Bloc "squelette" animé (shimmer) — placeholder de chargement réutilisable.
  * Utiliser avec une taille fixe (height/width/fillMaxWidth) pour dessiner la forme du contenu.
+ * Le shimmer utilise une teinte dorée premium UNOVAPP (au lieu du gris standard).
  */
 @Composable
 fun ShimmerBox(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(8.dp)
+    shape: Shape = RoundedCornerShape(8.dp),
+    gold: Boolean = false
 ) {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val x by transition.animateFloat(
@@ -55,8 +57,13 @@ fun ShimmerBox(
         ),
         label = "shimmerX"
     )
+    val colors = if (gold) {
+        listOf(UnovColors.Surface, UnovColors.Accent.copy(alpha = 0.10f), UnovColors.Surface)
+    } else {
+        listOf(UnovColors.Surface, UnovColors.SurfaceAlt, UnovColors.Surface)
+    }
     val brush = Brush.linearGradient(
-        colors = listOf(UnovColors.Surface, UnovColors.SurfaceAlt, UnovColors.Surface),
+        colors = colors,
         start = Offset(x - 300f, 0f),
         end = Offset(x, 0f)
     )

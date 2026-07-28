@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.rememberCountUp
 import com.unovapp.android.ui.components.unovTap
+import com.unovapp.android.ui.components.CoinShower
+import com.unovapp.android.ui.components.BalanceFlip
 import com.unovapp.android.ui.theme.UnovAppTheme
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
@@ -606,6 +608,9 @@ private fun SuccessStep(
             .windowInsetsPadding(WindowInsets.systemBars),
         contentAlignment = Alignment.Center
     ) {
+        // Coin shower — pluie de pièces dorées au succès
+        CoinShower(trigger = 1, modifier = Modifier.fillMaxSize())
+
         // Background glow
         Box(
             modifier = Modifier
@@ -649,13 +654,15 @@ private fun SuccessStep(
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "${formatNum(coins)} jetons ajoutés à ton portefeuille.",
-                color = UnovColors.TextDim,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                textAlign = TextAlign.Center
-            )
+            BalanceFlip(trigger = 1) {
+                Text(
+                    text = "${formatNum(coins)} jetons ajoutés à ton portefeuille.",
+                    color = UnovColors.TextDim,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
             Text(
                 text = "Réf : $refCode",
                 color = UnovColors.TextMute,

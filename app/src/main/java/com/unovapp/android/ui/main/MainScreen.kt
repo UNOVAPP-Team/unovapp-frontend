@@ -44,6 +44,7 @@ import com.unovapp.android.ui.create.CreateScreen
 import com.unovapp.android.ui.battle.BattleScreen
 import com.unovapp.android.ui.components.BottomNav
 import com.unovapp.android.ui.components.MainTab
+import com.unovapp.android.ui.components.WatermarkFloat
 import com.unovapp.android.ui.feed.FeedScreen
 import com.unovapp.android.ui.inbox.InboxScreen
 import com.unovapp.android.ui.profile.ConnectionsScreen
@@ -157,6 +158,11 @@ fun MainScreen(
             .fillMaxSize()
             .background(Color(0xFF0D0D0D))
         ) {
+            // Filigrane UNOVAPP en arrière-plan — effet de luxe subtil
+            WatermarkFloat(
+                modifier = Modifier.fillMaxSize(),
+                alpha = 0.03f
+            )
             // Contenu principal — remplit 100 % de l'écran sans contrainte Scaffold
             AnimatedContent(
                 targetState = tab,
@@ -180,7 +186,10 @@ fun MainScreen(
                         onOpenProfile = { creatorId -> people.add(People.Profile(creatorId)) },
                         // Met le feed en pause (image + son) dès qu'un overlay le recouvre :
                         // création vidéo, wallet, battle, profil visité…
-                        active = !showCreate && overlay == null && people.isEmpty()
+                        active = !showCreate && overlay == null && people.isEmpty(),
+                        // L'Orbe pilote la navigation (nouvelle maquette : plus de barre d'onglets).
+                        onNavigate = { navigateToTab(it) },
+                        onOpenCreate = { showCreate = true }
                     )
                     MainTab.Search -> SearchScreen(
                         contentPadding = screenPadding,
@@ -206,15 +215,17 @@ fun MainScreen(
                 }
             }
 
-            // BottomNav flotte au-dessus du contenu — fond transparent (retiré de BottomNav.kt)
-            // laisse la vidéo visible derrière sur le Feed.
-            BottomNav(
-                active = tab,
-                onTabChange = { navigateToTab(it) },
-                onCreate = { showCreate = true },
-                inboxUnread = inboxUnread,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
+            // BottomNav — masquée sur le Flux (nouvelle maquette : seul l'Orbe navigue).
+            // Conservée sur les autres onglets, le temps de migrer chacun vers l'Orbe.
+            if (tab != MainTab.Feed) {
+                BottomNav(
+                    active = tab,
+                    onTabChange = { navigateToTab(it) },
+                    onCreate = { showCreate = true },
+                    inboxUnread = inboxUnread,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
 
             // Battle overlay — fade in/out (immersif, pas de slide)
             AnimatedVisibility(

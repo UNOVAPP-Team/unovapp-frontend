@@ -57,13 +57,12 @@ fun UnovAppNavigation(
                 ) + fadeIn(UnovMotion.standard())
             }
         ) {
-            OnboardingScreen(
+            // Onboarding « La braise, pas le bruit » (13 écrans, nouvelle maquette).
+            // À la fin (Orbe « entrer »), on file vers l'auth existante — le flux
+            // numéro/OTP de la maquette sera branché sur send-phone-otp/verify-phone
+            // dans une étape ultérieure.
+            com.unovapp.android.ui.onboarding.ember.EmberOnboarding(
                 onFinished = {
-                    navController.navigate(Screen.Auth.route) {
-                        popUpTo(Screen.Onboarding.route) { inclusive = true }
-                    }
-                },
-                onLogin = {
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }

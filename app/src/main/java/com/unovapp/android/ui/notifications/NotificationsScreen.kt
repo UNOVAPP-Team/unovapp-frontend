@@ -46,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.unovapp.android.data.notification.NotificationItemDto
 import com.unovapp.android.ui.components.enterFadeSlide
+import com.unovapp.android.ui.components.StaggerReveal
 import com.unovapp.android.ui.theme.UnovColors
 
 @Composable
@@ -99,16 +100,16 @@ fun NotificationsScreen(
                 contentPadding = contentPadding
             ) {
                 items(state.items, key = { it.id }) { n ->
+                    StaggerReveal(index = state.items.indexOf(n).coerceAtMost(11)) {
                     NotificationRow(
                         n = n,
                         loading = state.openingVideoId == n.data["video_id"],
                         onClick = {
                             vm.markRead(n.id)
-                            // Notification liée à une vidéo → on l'ouvre : le créateur voit
-                            // immédiatement LAQUELLE de ses vidéos a reçu la réaction.
                             n.data["video_id"]?.takeIf { it.isNotBlank() }?.let(vm::openVideo)
                         }
                     )
+                    }
                 }
                 item {
                     // Pagination : charge plus en atteignant le bas.

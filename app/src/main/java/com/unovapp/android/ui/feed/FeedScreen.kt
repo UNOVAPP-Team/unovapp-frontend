@@ -93,7 +93,10 @@ fun FeedScreen(
     onOpenProfile: (creatorId: String) -> Unit = {},
     /** false quand un écran/overlay recouvre le feed (création, wallet, profil visité…) :
      *  on met alors la vidéo en pause pour couper l'image ET le son. */
-    active: Boolean = true
+    active: Boolean = true,
+    /** L'Orbe pilote la navigation de l'app (remplace la barre d'onglets sur le Flux). */
+    onNavigate: (com.unovapp.android.ui.components.MainTab) -> Unit = {},
+    onOpenCreate: () -> Unit = {}
 ) {
     val feedVm: FeedViewModel = hiltViewModel()
     val feedState by feedVm.state.collectAsStateWithLifecycle()
@@ -110,6 +113,9 @@ fun FeedScreen(
         pageCount = { videos.size }
     )
     var tab by rememberSaveable { mutableStateOf(FeedTab.ForYou) }
+    // Nouvelle maquette : mode de tri (Suivis/Braise) + ouverture de la navigation de l'Orbe.
+    var feedMode by rememberSaveable { mutableStateOf(EmberFeedMode.Braise) }
+    var orbeOpen by remember { mutableStateOf(false) }
     var commentsForVideoId by remember { mutableStateOf<String?>(null) }
     var giftSheetOpen by remember { mutableStateOf(false) }
     var giftBreakdownVideo by remember { mutableStateOf<FeedVideoUi?>(null) }
@@ -245,55 +251,47 @@ fun FeedScreen(
                     alpha = 1f - 0.22f * f
                 }
             ) {
-            FeedItem(
+            EmberFeedItem(
                 video = videos[page],
                 isCurrentPage = page == pagerState.currentPage,
-                muted = muted,
-                bottomPadding = bottomPadding,
                 // Pool : la page courante ET ses voisines reçoivent leur lecteur (voisins =
                 // préparés/en pause). Seule la courante joue → jamais deux lectures en même temps.
                 player = if (kotlin.math.abs(page - pagerState.currentPage) <= 1) pool.playerForPage(page) else null,
-                playbackProgress = if (page == pagerState.currentPage) playbackProgress else 0f,
+                progress = if (page == pagerState.currentPage) playbackProgress else 0f,
                 durationMs = if (page == pagerState.currentPage) playbackDurationMs else 0L,
-                // Scrub de la barre : saute à la position visée (au relâchement du drag).
-                onSeek = { fraction ->
-                    pool.currentPlayer()?.let { p ->
-                        val d = p.duration
-                        if (d > 0) {
-                            p.seekTo((fraction * d).toLong().coerceIn(0L, d))
-                            playbackProgress = fraction // reflet immédiat, sans attendre le tick
-                        }
-                    }
-                },
+                isFollowing = following.contains(videos[page].creatorId),
+                isSelf = currentUserId != null && videos[page].creatorId == currentUserId,
+                reacted = videos[page].isLiked || ReactionMemory.map.containsKey(videos[page].id),
                 showPauseIndicator = page == pagerState.currentPage && userPaused,
                 onTogglePlay = { userPaused = !userPaused },
-                onCommentClick = { commentsForVideoId = videos[page].id },
-                onGiftClick = { giftSheetOpen = true },
-                onGiftCountClick = { giftBreakdownVideo = videos[page] },
-                onChallengeClick = { /* TODO: ouvrir création Battle */ },
-                onLike = { videoId -> feedVm.toggleLike(videoId) },
-                onSave = { feedVm.toggleSave(videos[page].id) },
-                onShare = { feedVm.share(videos[page].id) },
-                onReport = { reason -> feedVm.reportVideo(videos[page].id, reason) },
-                // Le suivi reflète le store partagé (persiste au scroll, met à jour le profil).
-                isFollowing = following.contains(videos[page].creatorId),
-                onFollow = { creatorId -> feedVm.follow(creatorId) },
-                // Masque « Suivre » sur mes propres vidéos + tap avatar/pseudo → profil créateur.
-                isSelf = currentUserId != null && videos[page].creatorId == currentUserId,
-                onOpenProfile = { creatorId -> if (creatorId.isNotBlank()) onOpenProfile(creatorId) }
+                // Souffler = la réaction (le like backend, en attendant l'économie de braises).
+                onSouffler = { videoId -> feedVm.toggleLike(videoId) },
+                // Étinceler = les commentaires (ancrés à un instant — feuille Étincelles).
+                onEtinceler = { commentsForVideoId = videos[page].id },
+                onSuivre = { creatorId -> feedVm.follow(creatorId) },
+                onOpenProfile = { creatorId -> if (creatorId.isNotBlank()) onOpenProfile(creatorId) },
+                onOrbe = { orbeOpen = true },
+                bottomInset = navBarBottom + 12.dp
             )
             }
         }
 
-        FeedHeader(
-            tab = tab,
-            onTabChange = { tab = it },
-            networkQuality = networkQuality,
+        // Chips du haut (Éco · 240p + toggle Suivis/Braise) — remplace l'ancien FeedHeader.
+        EmberFeedTop(
             ecoActive = ecoActive,
-            onToggleEco = { ecoActive = !ecoActive },
-            muted = muted,
-            onToggleMute = { muted = !muted },
+            mode = feedMode,
+            onToggleMode = { feedMode = it },
             modifier = Modifier.align(Alignment.TopCenter)
+        )
+
+        // Rangée de navigation de l'Orbe (Flux · Explorer · + · Pulsations · Univers).
+        OrbeNavRow(
+            visible = orbeOpen,
+            onDismiss = { orbeOpen = false },
+            onNavigate = { orbeOpen = false; onNavigate(it) },
+            onCreate = { orbeOpen = false; onOpenCreate() },
+            bottomInset = navBarBottom,
+            modifier = Modifier.align(Alignment.BottomCenter)
         )
     }
 

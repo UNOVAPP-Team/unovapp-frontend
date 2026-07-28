@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.unovapp.android.ui.components.unovTap
+import com.unovapp.android.ui.components.RecordingPulse
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
 import androidx.compose.material.icons.Icons
@@ -420,6 +421,11 @@ private fun CameraRecorderUi(
                     .unovTap(onClick = onToggleRecording, pressedScale = 0.92f),
                 contentAlignment = Alignment.Center
             ) {
+                // Anneau pulsant rouge pendant l'enregistrement
+                RecordingPulse(
+                    isActive = isRecording,
+                    modifier = Modifier.size(90.dp)
+                )
                 Box(
                     modifier = Modifier
                         .size(if (isRecording) 32.dp else 62.dp)

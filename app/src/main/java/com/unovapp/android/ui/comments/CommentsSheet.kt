@@ -60,6 +60,7 @@ import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.ShimmerBox
 import com.unovapp.android.ui.components.StaggerReveal
 import com.unovapp.android.ui.components.unovTap
+import com.unovapp.android.ui.components.GoldShimmerBox
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovMotion
 
@@ -93,10 +94,10 @@ private fun CommentSkeletonRow() {
             .padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ShimmerBox(modifier = Modifier.size(36.dp), shape = CircleShape)
+        GoldShimmerBox(modifier = Modifier.size(36.dp), shape = CircleShape)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ShimmerBox(modifier = Modifier.height(12.dp).fillMaxWidth(0.35f))
-            ShimmerBox(modifier = Modifier.height(12.dp).fillMaxWidth(0.8f))
+            GoldShimmerBox(modifier = Modifier.height(12.dp).fillMaxWidth(0.35f))
+            GoldShimmerBox(modifier = Modifier.height(12.dp).fillMaxWidth(0.8f))
         }
     }
 }

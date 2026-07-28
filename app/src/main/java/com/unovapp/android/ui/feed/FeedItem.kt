@@ -216,11 +216,28 @@ fun FeedItem(
             }
     ) {
         // Surface partagée : n'attache le lecteur UNIQUE qu'à la page courante (player != null).
+        // Video end zoom-out : léger recul + assombrissement quand la vidéo arrive à la fin.
+        val endScale by animateFloatAsState(
+            targetValue = if (progress > 0.95f) 0.96f else 1f,
+            animationSpec = tween(400, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+            label = "endZoom"
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    if (isCurrentPage) {
+                        scaleX = endScale
+                        scaleY = endScale
+                    }
+                }
+        ) {
         FeedVideoSurface(
             player = player,
             thumbnailUrl = video.thumbnailUrl,
             modifier = Modifier.fillMaxSize()
         )
+        }
 
         // Indicateur de pause central (façon TikTok) — visible uniquement en pause manuelle.
         androidx.compose.animation.AnimatedVisibility(
