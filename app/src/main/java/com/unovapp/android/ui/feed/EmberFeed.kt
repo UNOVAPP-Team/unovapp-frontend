@@ -75,6 +75,7 @@ import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.theme.Ember
 import com.unovapp.android.ui.theme.EmberDim
 import com.unovapp.android.ui.theme.EmberMotion
+import com.unovapp.android.ui.theme.appear
 import com.unovapp.android.ui.theme.arcOpen
 import com.unovapp.android.ui.theme.breathe
 import com.unovapp.android.ui.theme.pressable
@@ -396,6 +397,23 @@ private fun EmberTimeline(
     }
 }
 
+/**
+ * Entrée d'un item de l'arc : il **grandit depuis l'Orbe** (§3.4) — l'origine du
+ * mouvement est le point touché, pas le centre de l'écran (R1).
+ *
+ * [k] = rang depuis le bas (0 = Braise, la plus proche de l'Orbe). Plus l'item est
+ * haut, plus il part de loin : la translation initiale le ramène vers l'Orbe, en
+ * bas et vers la gauche. Le stagger de 28 ms fait partir la Braise en premier.
+ */
+@Composable
+private fun Modifier.emanate(k: Int): Modifier = appear(
+    dxFrom = (-18 - k * 5).dp,
+    dyFrom = (48 + k * 34).dp,
+    scaleFrom = 0.72f,
+    durationMs = EmberMotion.DurBase,
+    delayMs = staggerDelay(k, 28)
+)
+
 /* ---------- Une action de l'arc éveillé (étiquette à gauche, pastille à droite) ---------- */
 
 @Composable
@@ -406,10 +424,18 @@ private fun ArcAction(
     /** La Braise est la plus importante : plus grande, pleine, et elle respire. */
     primary: Boolean = false,
     labelColor: Color = Ember.TextDim,
+    /**
+     * Décalage vers l'intérieur qui donne sa COURBURE à l'arc. Mesuré sur la maquette
+     * (écran 02) : les centres des pastilles décrivent un arc de cercle dont le point
+     * le plus à gauche tombe sur Étinceler/Garder, et qui repart vers la droite en
+     * montant comme en descendant. Sans ça, on obtient une colonne droite — ce que
+     * la maquette ne montre pas.
+     */
+    arcInset: androidx.compose.ui.unit.Dp = 0.dp,
     icon: @Composable () -> Unit
 ) {
     Row(
-        modifier = modifier.pressable(onClick = onClick),
+        modifier = modifier.padding(end = arcInset).pressable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -673,9 +699,15 @@ fun OrbeNavRow(
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(EmberMotion.DurBase)),
-        // L'interface se retire d'un bloc, sans stagger (§Écran 02).
-        exit = fadeOut(tween(EmberMotion.DurQuick)),
+        enter = fadeIn(tween(EmberMotion.DurBase, easing = EmberMotion.EaseOut)),
+        // L'interface se retire D'UN BLOC, sans stagger, et se rétracte vers l'Orbe :
+        // 160 ms EaseIn, origine en bas-centre — là où se trouve l'Orbe (§Écran 02).
+        exit = fadeOut(tween(EmberMotion.DurQuick, easing = EmberMotion.EaseIn)) +
+            scaleOut(
+                targetScale = 0.9f,
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                animationSpec = tween(EmberMotion.DurQuick, easing = EmberMotion.EaseIn)
+            ),
         modifier = Modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -690,27 +722,32 @@ fun OrbeNavRow(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                ArcAction("Envoyer", onEnvoyer, Modifier.arcOpen(delayMs = staggerDelay(5, 28))) {
+                // `emanate(k)` : l'item naît À L'ORBE et s'étire jusqu'à sa place (§3.4,
+                // « transform-origin = la position de l'Orbe »). Plus il est haut dans
+                // l'arc, plus il vient de loin — d'où le facteur k. Stagger 28 ms, la
+                // Braise partant EN PREMIÈRE (k = 0).
+                ArcAction("Envoyer", onEnvoyer, Modifier.emanate(5), arcInset = 0.dp) {
                     Icon(Icons.AutoMirrored.Filled.Send, "Envoyer", tint = Ember.Text, modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Offrir", onOffrir, Modifier.arcOpen(delayMs = staggerDelay(4, 28))) {
+                ArcAction("Offrir", onOffrir, Modifier.emanate(4), arcInset = 14.dp) {
                     Icon(Icons.Outlined.CardGiftcard, "Offrir", tint = Ember.Text, modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Garder", onGarder, Modifier.arcOpen(delayMs = staggerDelay(3, 28))) {
+                ArcAction("Garder", onGarder, Modifier.emanate(3), arcInset = 21.dp) {
                     Icon(Icons.Outlined.BookmarkBorder, "Garder", tint = Ember.Text, modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Étinceler", onEtinceler, Modifier.arcOpen(delayMs = staggerDelay(2, 28))) {
+                ArcAction("Étinceler", onEtinceler, Modifier.emanate(2), arcInset = 23.dp) {
                     SparkIcon(modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Lueur · gratuit", onLueur, Modifier.arcOpen(delayMs = staggerDelay(1, 28))) {
+                ArcAction("Lueur · gratuit", onLueur, Modifier.emanate(1), arcInset = 22.dp) {
                     LueurIcon(modifier = Modifier.size(22.dp))
                 }
-                // La Braise arrive EN PREMIER (delay 0) et reste le seul élément qui boucle.
+                // La Braise arrive EN PREMIER et reste le seul élément qui boucle.
                 ArcAction(
                     "Braise · jeton", onBraise,
-                    Modifier.arcOpen(delayMs = 0),
+                    Modifier.emanate(0),
                     primary = true,
-                    labelColor = Ember.Braise
+                    labelColor = Ember.Braise,
+                    arcInset = 11.dp
                 ) {
                     Icon(Icons.Filled.LocalFireDepartment, "Braise", tint = Ember.BraisePale2, modifier = Modifier.size(26.dp))
                 }
@@ -721,20 +758,25 @@ fun OrbeNavRow(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    // Juste au-dessus de l'Orbe, sans le chevaucher.
-                    .padding(bottom = bottomInset + 92.dp, start = 10.dp, end = 10.dp),
+                    // Juste au-dessus de l'Orbe, sans le chevaucher. La marge latérale
+                    // (28 dp) reproduit l'empan mesuré sur la maquette : les centres
+                    // extrêmes couvrent ~2/3 de la largeur, pas toute la largeur.
+                    .padding(bottom = bottomInset + 92.dp, start = 28.dp, end = 28.dp),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // Stagger depuis le centre vers l'extérieur (le « + » en premier).
-                NavDest("Flux", active = true, modifier = Modifier.arcOpen(delayMs = staggerDelay(2, 28))) { onDismiss() }
-                NavDest("Explorer", modifier = Modifier.arcOpen(delayMs = staggerDelay(1, 28))) {
+                // Mesuré sur la maquette : les quatre destinations sont au MÊME niveau,
+                // et seul le « + » est surélevé (~23 dp). Ce décrochement central est
+                // ce qui donne à la rangée sa courbe — il ne s'invente pas.
+                NavDest("Flux", active = true, modifier = Modifier.emanate(2)) { onDismiss() }
+                NavDest("Explorer", modifier = Modifier.emanate(1)) {
                     onNavigate(com.unovapp.android.ui.components.MainTab.Search)
                 }
                 // Le « + » central — création, en lagune (couleur réservée à l'IA/produit).
                 Box(
                     modifier = Modifier
-                        .arcOpen(delayMs = 0)
+                        .offset(y = (-23).dp)
+                        .emanate(0)
                         .size(EmberDim.Orbe)
                         .clip(CircleShape)
                         .background(Ember.Bg.copy(alpha = 0.7f))
@@ -744,10 +786,10 @@ fun OrbeNavRow(
                 ) {
                     Text("+", color = Ember.Lagune, fontSize = 28.sp, fontWeight = FontWeight.Light)
                 }
-                NavDest("Pulsations", badge = true, modifier = Modifier.arcOpen(delayMs = staggerDelay(1, 28))) {
+                NavDest("Pulsations", badge = true, modifier = Modifier.emanate(1)) {
                     onNavigate(com.unovapp.android.ui.components.MainTab.Inbox)
                 }
-                NavDest("Univers", modifier = Modifier.arcOpen(delayMs = staggerDelay(2, 28))) {
+                NavDest("Univers", modifier = Modifier.emanate(2)) {
                     onNavigate(com.unovapp.android.ui.components.MainTab.Profile)
                 }
             }
