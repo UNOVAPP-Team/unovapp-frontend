@@ -569,10 +569,13 @@ fun EmberFeedTop(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         // Chip Éco (honnête : dégradation annoncée) — visible seulement quand le réseau faiblit.
+        // Elle est ÉLASTIQUE (weight, fill=false) et tronque son texte : c'est elle qui cède
+        // la place, jamais la bascule. Avec une largeur figée, la bascule se retrouvait
+        // comprimée et « Braise » se cassait en trois lignes.
         if (ecoActive) {
             Row(
                 modifier = Modifier
-                    .width(230.dp)
+                    .weight(1f, fill = false)
                     .clip(RoundedCornerShape(999.dp))
                     .background(Ember.Surface.copy(alpha = 0.7f))
                     .border(1.dp, Ember.Braise.copy(alpha = 0.5f), RoundedCornerShape(999.dp))
@@ -581,13 +584,20 @@ fun EmberFeedTop(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SparkIcon(modifier = Modifier.size(15.dp), color = Ember.BraiseClair)
-                Text("Éco · 240p — le réseau faiblit", color = Ember.BraiseClair, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "Éco · 240p — le réseau faiblit",
+                    color = Ember.BraiseClair, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
             }
         } else {
             Spacer(Modifier.width(1.dp))
         }
 
+        Spacer(Modifier.width(10.dp))
+
         // Toggle Suivis / Braise (les deux seuls tris, sans algorithme).
+        // Ne se comprime jamais : chaque libellé tient sur une ligne.
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
@@ -602,6 +612,7 @@ fun EmberFeedTop(
                 color = if (mode == EmberFeedMode.Suivis) Ember.Text else Ember.TextMute,
                 fontSize = 14.sp,
                 fontWeight = if (mode == EmberFeedMode.Suivis) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1, softWrap = false,
                 modifier = Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() }, indication = null
                 ) { onToggleMode(EmberFeedMode.Suivis) }
@@ -612,6 +623,7 @@ fun EmberFeedTop(
                 color = if (mode == EmberFeedMode.Braise) Ember.Text else Ember.TextMute,
                 fontSize = 14.sp,
                 fontWeight = if (mode == EmberFeedMode.Braise) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1, softWrap = false,
                 modifier = Modifier.clickable(
                     interactionSource = remember { MutableInteractionSource() }, indication = null
                 ) { onToggleMode(EmberFeedMode.Braise) }

@@ -36,7 +36,13 @@ data class FeedState(
     val currentPage: Int           = 0,
     val currentVideoId: String?    = null,
     /** Tri courant : `null` = chronologique (Braise) · `following` = Suivis. */
-    val feedType: String?          = null
+    val feedType: String?          = null,
+    /**
+     * Vrai uniquement si la dernière requête a ÉCHOUÉ (réseau/serveur).
+     * Une liste vide n'est pas une erreur : « Suivis » sans abonnement renvoie
+     * légitimement 0 vidéo — il ne faut pas accuser la connexion dans ce cas.
+     */
+    val loadFailed: Boolean        = false
 )
 
 @HiltViewModel
@@ -249,6 +255,7 @@ class FeedViewModel @Inject constructor(
                     val ordered = orderWarmFirst(r.data.data.shuffled())
                     _state.update { it.copy(
                         isLoading    = false,
+                        loadFailed   = false,
                         videos       = ordered.map { dto -> dto.toUi() },
                         nextCursor   = r.data.nextCursor,
                         hasMore      = r.data.hasMore,
@@ -264,7 +271,7 @@ class FeedViewModel @Inject constructor(
                 // Échec réseau : on garde ce qui est affiché (souvent le cache disque).
                 // Si la liste est vide, FeedScreen montre l'état erreur + « Réessayer » —
                 // plus de repli sur des vidéos mockées (trompeur + bande passante gaspillée).
-                is NetworkResult.Failure -> _state.update { it.copy(isLoading = false) }
+                is NetworkResult.Failure -> _state.update { it.copy(isLoading = false, loadFailed = true) }
             }
         }
     }

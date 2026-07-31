@@ -5,6 +5,7 @@ package com.unovapp.android.ui.feed
 import androidx.compose.animation.AnimatedVisibility
 import coil.imageLoader
 import coil.request.ImageRequest
+import com.unovapp.android.ui.components.EmptyState
 import com.unovapp.android.ui.components.ErrorRetry
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -221,12 +222,24 @@ fun FeedScreen(
             .background(Color.Black)
     ) {
         if (videos.isEmpty()) {
-            if (feedState.isLoading) {
-                FeedPlaceholder()
-            } else {
-                ErrorRetry(
+            when {
+                feedState.isLoading -> FeedPlaceholder()
+                // Vraie panne réseau/serveur : on propose de réessayer.
+                feedState.loadFailed -> ErrorRetry(
                     message = "Impossible de charger le feed.\nVérifie ta connexion.",
                     onRetry = { feedVm.loadFeed() },
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                // Requête réussie mais 0 vidéo — ce n'est PAS une panne. « Suivis » sans
+                // abonnement est le cas courant : accuser la connexion serait un mensonge.
+                feedState.feedType == VideoApi.FEED_FOLLOWING -> EmptyState(
+                    title = "Tu ne suis encore personne",
+                    subtitle = "Suis des créateurs pour voir leurs vidéos ici, ou reviens sur Braise.",
+                    modifier = Modifier.align(Alignment.Center)
+                )
+                else -> EmptyState(
+                    title = "Aucune vidéo pour l'instant",
+                    subtitle = "Reviens dans un moment — le flux se remplit vite.",
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
