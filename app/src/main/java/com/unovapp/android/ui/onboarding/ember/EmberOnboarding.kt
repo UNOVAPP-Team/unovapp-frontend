@@ -942,29 +942,32 @@ private fun WaveGlyph(modifier: Modifier = Modifier, color: Color = Ember.Braise
     }
 }
 
+/** L'Étincelle — gerbe à centre CREUX, rais longs et fins (cf. [LueurGlyph]). */
 @Composable
 private fun SparkGlyph(modifier: Modifier = Modifier, color: Color = Ember.Text) {
     Canvas(modifier = modifier) {
         val c = Offset(size.width / 2f, size.height / 2f)
-        val rOut = size.minDimension / 2f; val rIn = rOut * 0.42f
+        val rOut = size.minDimension / 2f; val rIn = rOut * 0.26f
         for (i in 0 until 8) {
             val a = Math.toRadians((i * 45).toDouble())
             val dx = kotlin.math.cos(a).toFloat(); val dy = kotlin.math.sin(a).toFloat()
-            drawLine(color, Offset(c.x + dx * rIn, c.y + dy * rIn), Offset(c.x + dx * rOut, c.y + dy * rOut), 2.dp.toPx(), StrokeCap.Round)
+            drawLine(color, Offset(c.x + dx * rIn, c.y + dy * rIn), Offset(c.x + dx * rOut, c.y + dy * rOut), 1.7.dp.toPx(), StrokeCap.Round)
         }
     }
 }
 
+/** La Lueur — soleil à disque PLEIN et rais courts (cf. [SparkGlyph]). */
 @Composable
 private fun LueurGlyph(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val c = Offset(size.width / 2f, size.height / 2f)
-        drawCircle(Ember.BraisePale2, radius = size.minDimension * 0.16f, center = c)
-        val rOut = size.minDimension / 2f; val rIn = rOut * 0.55f
+        val rOut = size.minDimension / 2f
+        drawCircle(Ember.BraisePale2, radius = rOut * 0.46f, center = c)
+        val rIn = rOut * 0.68f
         for (i in 0 until 8) {
             val a = Math.toRadians((i * 45).toDouble())
             val dx = kotlin.math.cos(a).toFloat(); val dy = kotlin.math.sin(a).toFloat()
-            drawLine(Ember.BraisePale2, Offset(c.x + dx * rIn, c.y + dy * rIn), Offset(c.x + dx * rOut, c.y + dy * rOut), 2.dp.toPx(), StrokeCap.Round)
+            drawLine(Ember.BraisePale2, Offset(c.x + dx * rIn, c.y + dy * rIn), Offset(c.x + dx * rOut, c.y + dy * rOut), 2.2.dp.toPx(), StrokeCap.Round)
         }
     }
 }

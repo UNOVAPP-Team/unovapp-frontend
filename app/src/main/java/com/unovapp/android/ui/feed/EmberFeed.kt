@@ -500,14 +500,19 @@ private fun WaveIcon(modifier: Modifier = Modifier, color: Color = Ember.Text) {
     }
 }
 
-/** L'étincelle — starburst radiant (8 rais). */
+/**
+ * L'ÉTINCELLE — une gerbe : 8 rais fins qui convergent vers un centre CREUX.
+ * À ne pas confondre avec la Lueur (soleil à disque plein) : ce sont deux notions
+ * différentes du produit, elles doivent se distinguer d'un coup d'œil à 22 dp.
+ * Ici : rais longs (du centre presque jusqu'au bord), trait fin, aucun disque.
+ */
 @Composable
 private fun SparkIcon(modifier: Modifier = Modifier, color: Color = Ember.Text) {
     Canvas(modifier = modifier) {
         val c = Offset(size.width / 2f, size.height / 2f)
         val rOut = size.minDimension / 2f
-        val rIn = rOut * 0.42f
-        val stroke = 2.dp.toPx()
+        val rIn = rOut * 0.26f
+        val stroke = 1.7.dp.toPx()
         for (i in 0 until 8) {
             val a = Math.toRadians((i * 45).toDouble())
             val dx = kotlin.math.cos(a).toFloat(); val dy = kotlin.math.sin(a).toFloat()
@@ -798,18 +803,24 @@ private fun NavDest(
     }
 }
 
-/** La Lueur — petit soleil rayonnant (réaction gratuite). */
+/**
+ * La LUEUR — un soleil : gros disque plein au centre, entouré de rais COURTS et
+ * bien détachés. C'est le contraire de l'Étincelle (gerbe creuse à rais longs) —
+ * la Lueur est douce et pleine, l'Étincelle est piquante et vide.
+ */
 @Composable
 private fun LueurIcon(modifier: Modifier = Modifier, color: Color = Ember.Text) {
     Canvas(modifier = modifier) {
         val c = Offset(size.width / 2f, size.height / 2f)
-        drawCircle(color, radius = size.minDimension * 0.17f, center = c)
         val rOut = size.minDimension / 2f
-        val rIn = rOut * 0.56f
+        // Disque central généreux (≈46 % du diamètre) : c'est lui qui signe la Lueur.
+        drawCircle(color, radius = rOut * 0.46f, center = c)
+        // Rais courts, nettement séparés du disque.
+        val rIn = rOut * 0.68f
         for (i in 0 until 8) {
             val a = Math.toRadians((i * 45).toDouble())
             val dx = kotlin.math.cos(a).toFloat(); val dy = kotlin.math.sin(a).toFloat()
-            drawLine(color, Offset(c.x + dx * rIn, c.y + dy * rIn), Offset(c.x + dx * rOut, c.y + dy * rOut), 2.dp.toPx(), StrokeCap.Round)
+            drawLine(color, Offset(c.x + dx * rIn, c.y + dy * rIn), Offset(c.x + dx * rOut, c.y + dy * rOut), 2.2.dp.toPx(), StrokeCap.Round)
         }
     }
 }
