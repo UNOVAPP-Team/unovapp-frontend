@@ -285,7 +285,8 @@ fun FeedScreen(
                 onSuivre = { creatorId -> feedVm.follow(creatorId) },
                 onOpenProfile = { creatorId -> if (creatorId.isNotBlank()) onOpenProfile(creatorId) },
                 onOrbe = { orbeOpen = true },
-                bottomInset = navBarBottom + 12.dp
+                bottomInset = navBarBottom + 12.dp,
+                awakened = orbeOpen && page == pagerState.currentPage
             )
             }
         }

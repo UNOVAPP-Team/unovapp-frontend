@@ -111,7 +111,13 @@ fun EmberFeedItem(
     onSuivre: (creatorId: String) -> Unit,
     onOpenProfile: (creatorId: String) -> Unit,
     onOrbe: () -> Unit,
-    bottomInset: androidx.compose.ui.unit.Dp = 0.dp
+    bottomInset: androidx.compose.ui.unit.Dp = 0.dp,
+    /**
+     * Vrai quand l'Orbe a convoqué l'état éveillé. La maquette (écran 02) n'y montre
+     * NI le bloc créateur NI la légende : la place revient à l'arc et à la navigation.
+     * On les retire donc, au lieu de les laisser transparaître sous le voile.
+     */
+    awakened: Boolean = false
 ) {
     // Double-tap = souffler (réaction) avec pop de flamme sous le doigt.
     var flamePop by remember(video.id) { mutableIntStateOf(0) }
@@ -187,35 +193,42 @@ fun EmberFeedItem(
                 .fillMaxWidth()
                 .padding(bottom = bottomInset)
         ) {
-            CreatorBlock(
-                video = video,
-                isFollowing = isFollowing,
-                isSelf = isSelf,
-                onSuivre = { onSuivre(video.creatorId) },
-                onOpenProfile = { onOpenProfile(video.creatorId) },
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp)
-            )
-
-            // Légende.
-            if (video.description.isNotBlank()) {
-                Text(
-                    text = video.description,
-                    color = Ember.Text,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)
+            // Bloc créateur + légende : présents au repos, retirés à l'éveil (écran 02).
+            if (!awakened) {
+                CreatorBlock(
+                    video = video,
+                    isFollowing = isFollowing,
+                    isSelf = isSelf,
+                    onSuivre = { onSuivre(video.creatorId) },
+                    onOpenProfile = { onOpenProfile(video.creatorId) },
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp)
                 )
+
+                // Légende.
+                if (video.description.isNotBlank()) {
+                    Text(
+                        text = video.description,
+                        color = Ember.Text,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)
+                    )
+                }
             }
 
-            // Ligne de temps + étincelles + durée.
+            // Ligne de temps + étincelles + durée — visible dans les deux états.
             EmberTimeline(
                 progress = progress,
                 durationMs = if (durationMs > 0) durationMs else video.durationSec * 1000L,
                 sparkSeed = video.id.hashCode(),
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp)
             )
+
+            // À l'éveil, la rangée de navigation occupe cette hauteur (dessinée par-dessus
+            // en overlay) : on lui réserve la place pour qu'elle ne recouvre rien.
+            if (awakened) Spacer(Modifier.height(96.dp))
 
             // AU REPOS : rien que l'Orbe (maquette écran 01). « Un seul point, sous ton
             // pouce. Pas de barre d'onglets, pas de menu à apprendre. » Les actions et la
@@ -646,7 +659,9 @@ fun OrbeNavRow(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Ember.Bg.copy(alpha = 0.55f))
+                // Assez opaque pour que l'arc reste lisible même sur une vidéo en plein
+                // jour — sur du contenu clair, 0.55 laissait tout se confondre.
+                .background(Ember.Bg.copy(alpha = 0.78f))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
         )
     }
@@ -664,8 +679,9 @@ fun OrbeNavRow(
             //    puis on remonte — stagger 28 ms (§Écran 02).
             Column(
                 modifier = Modifier
+                    // Dégagement calculé : Orbe (~74) + rangée de nav (~78) + marge.
                     .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = bottomInset + 132.dp),
+                    .padding(end = 20.dp, bottom = bottomInset + 196.dp),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -700,7 +716,8 @@ fun OrbeNavRow(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(bottom = bottomInset + 96.dp, start = 10.dp, end = 10.dp),
+                    // Juste au-dessus de l'Orbe, sans le chevaucher.
+                    .padding(bottom = bottomInset + 92.dp, start = 10.dp, end = 10.dp),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
