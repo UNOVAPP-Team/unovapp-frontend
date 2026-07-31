@@ -753,29 +753,53 @@ fun OrbeNavRow(
                 }
             }
 
-            // ── LA RANGÉE DE NAVIGATION, au-dessus de l'Orbe : Flux · Explorer · + · Pulsations · Univers.
-            Row(
+            // ── LA RANGÉE DE NAVIGATION : ce n'est PAS une rangée droite, c'est un ARC.
+            //
+            //    Centres relevés sur la maquette (écran 02) :
+            //      Flux (126,1394) · Explorer (242,1364) · + (385,1346)
+            //      Pulsations (530,1364) · Univers (647,1394)
+            //    Un cercle ajusté dessus donne un centre à (386, 2077) et R ≈ 731 px,
+            //    pour un gabarit large de 780 px — soit R ≈ 0,94 × largeur d'écran.
+            //    Signature du cercle : les écarts horizontaux sont PLUS LARGES près du
+            //    sommet (143/145 px) qu'aux extrémités (116/117 px). Une rangée à
+            //    espacement régulier ne peut pas produire ça.
+            BoxWithConstraints(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    // Juste au-dessus de l'Orbe, sans le chevaucher. La marge latérale
-                    // (28 dp) reproduit l'empan mesuré sur la maquette : les centres
-                    // extrêmes couvrent ~2/3 de la largeur, pas toute la largeur.
-                    .padding(bottom = bottomInset + 92.dp, start = 28.dp, end = 28.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.SpaceEvenly
+                    .padding(bottom = bottomInset + 84.dp)
             ) {
-                // Mesuré sur la maquette : les quatre destinations sont au MÊME niveau,
-                // et seul le « + » est surélevé (~23 dp). Ce décrochement central est
-                // ce qui donne à la rangée sa courbe — il ne s'invente pas.
-                NavDest("Flux", active = true, modifier = Modifier.emanate(2)) { onDismiss() }
-                NavDest("Explorer", modifier = Modifier.emanate(1)) {
-                    onNavigate(com.unovapp.android.ui.components.MainTab.Search)
+                val w = maxWidth
+                val radius = w * 0.937f                     // R mesuré, en proportion
+                val dxOuter = w * 0.334f                    // Flux / Univers
+                val dxMid = w * 0.185f                      // Explorer / Pulsations
+                // Creux du cercle : dy = R − √(R² − dx²). C'est lui qui courbe la rangée.
+                fun sag(dx: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp {
+                    val r = radius.value; val d = dx.value
+                    return (r - kotlin.math.sqrt((r * r - d * d).coerceAtLeast(0f))).dp
                 }
-                // Le « + » central — création, en lagune (couleur réservée à l'IA/produit).
+                val sagOuter = sag(dxOuter)
+                val sagMid = sag(dxMid)
+
+                // Les items sont ancrés en bas-centre ; `sagOuter` sert de ligne de base
+                // pour que le sommet (le « + ») soit le point le plus haut.
+                NavDest(
+                    "Flux", active = true,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .offset(x = -dxOuter, y = sagOuter - sagOuter).emanate(2)
+                ) { onDismiss() }
+
+                NavDest(
+                    "Explorer",
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .offset(x = -dxMid, y = sagMid - sagOuter).emanate(1)
+                ) { onNavigate(com.unovapp.android.ui.components.MainTab.Search) }
+
+                // Le « + » au sommet de l'arc — création, en lagune.
                 Box(
                     modifier = Modifier
-                        .offset(y = (-23).dp)
+                        .align(Alignment.BottomCenter)
+                        .offset(y = -sagOuter)
                         .emanate(0)
                         .size(EmberDim.Orbe)
                         .clip(CircleShape)
@@ -786,12 +810,18 @@ fun OrbeNavRow(
                 ) {
                     Text("+", color = Ember.Lagune, fontSize = 28.sp, fontWeight = FontWeight.Light)
                 }
-                NavDest("Pulsations", badge = true, modifier = Modifier.emanate(1)) {
-                    onNavigate(com.unovapp.android.ui.components.MainTab.Inbox)
-                }
-                NavDest("Univers", modifier = Modifier.emanate(2)) {
-                    onNavigate(com.unovapp.android.ui.components.MainTab.Profile)
-                }
+
+                NavDest(
+                    "Pulsations", badge = true,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .offset(x = dxMid, y = sagMid - sagOuter).emanate(1)
+                ) { onNavigate(com.unovapp.android.ui.components.MainTab.Inbox) }
+
+                NavDest(
+                    "Univers",
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .offset(x = dxOuter, y = sagOuter - sagOuter).emanate(2)
+                ) { onNavigate(com.unovapp.android.ui.components.MainTab.Profile) }
             }
         }
     }
