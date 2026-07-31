@@ -67,6 +67,8 @@ import com.unovapp.android.ui.components.CoinShower
 import com.unovapp.android.ui.components.BalanceFlip
 import com.unovapp.android.ui.theme.UnovAppTheme
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.ui.theme.riseIn
+import com.unovapp.android.ui.theme.staggerDelay
 import com.unovapp.android.ui.theme.UnovGradients
 import com.unovapp.android.ui.theme.UnovMotion
 import kotlinx.coroutines.delay
@@ -218,11 +220,12 @@ private fun PacksStep(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEachIndexed { colIdx, pack ->
                         val packIdx = rowIdx * 2 + colIdx
+                        // §Écran 11 — paliers de recharge : riseIn 14 px, stagger 40 ms.
                         PackTile(
                             pack = pack,
                             isSelected = packIdx == selectedIdx,
                             onClick = { onSelect(packIdx) },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f).riseIn(delayMs = staggerDelay(packIdx, 40))
                         )
                     }
                 }
@@ -243,12 +246,13 @@ private fun PacksStep(
             modifier = Modifier.padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Provider.entries.forEach { p ->
+            // §Écran 11 — cartes d'opérateur : riseIn 14 px, stagger 50 ms (MTN en premier).
+            Provider.entries.forEachIndexed { i, p ->
                 ProviderTile(
                     provider = p,
                     isSelected = p == provider,
                     onClick = { onProviderChange(p) },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f).riseIn(delayMs = staggerDelay(i, 50))
                 )
             }
         }

@@ -58,7 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.ShimmerBox
-import com.unovapp.android.ui.components.StaggerReveal
+import com.unovapp.android.ui.theme.riseIn
+import com.unovapp.android.ui.theme.staggerDelay
 import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.components.GoldShimmerBox
 import com.unovapp.android.ui.theme.UnovColors
@@ -173,15 +174,15 @@ fun CommentsSheet(
                 items(5) { CommentSkeletonRow() }
             }
             itemsIndexed(displayComments, key = { _, c -> c.id }) { index, c ->
-                StaggerReveal(index = index) {
-                    CommentRow(
-                        c = c,
-                        liked = c.isLiked,
-                        onToggleLike = { vm.toggleCommentLike(c.id) },
-                        canPin = isVideoOwner,
-                        onTogglePin = { vm.togglePin(c.id) }
-                    )
-                }
+                // §Écran 03 — groupes de moments : riseIn 14 px, stagger 40 ms, plafond 8.
+                CommentRow(
+                    c = c,
+                    liked = c.isLiked,
+                    onToggleLike = { vm.toggleCommentLike(c.id) },
+                    canPin = isVideoOwner,
+                    onTogglePin = { vm.togglePin(c.id) },
+                    modifier = Modifier.riseIn(delayMs = staggerDelay(index), key = c.id)
+                )
             }
             if (!state.isLoading && displayComments.isEmpty()) {
                 item {
@@ -329,10 +330,11 @@ private fun CommentRow(
     liked: Boolean,
     onToggleLike: () -> Unit,
     canPin: Boolean = false,
-    onTogglePin: () -> Unit = {}
+    onTogglePin: () -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)

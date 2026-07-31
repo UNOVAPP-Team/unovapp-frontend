@@ -35,7 +35,11 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.components.RecordingPulse
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.ui.theme.breathe
 import com.unovapp.android.ui.theme.UnovGradients
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -413,9 +417,27 @@ private fun CameraRecorderUi(
             }
 
             // Bouton d'enregistrement (anneau + pastille qui passe en carré quand on filme).
+            // §Écran 07 : au repos il respire à 1.02 — il invite sans clignoter ; quand on
+            // filme il SE CONTRACTE (80 → 72 dp en 160 ms), il ne grandit jamais.
+            val recSize by animateDpAsState(
+                targetValue = if (isRecording) 72.dp else 80.dp,
+                animationSpec = tween(EmberMotion.DurQuick, easing = EmberMotion.EaseOut),
+                label = "recButtonSize"
+            )
+            val innerSize by animateDpAsState(
+                targetValue = if (isRecording) 32.dp else 62.dp,
+                animationSpec = tween(EmberMotion.DurQuick, easing = EmberMotion.EaseOut),
+                label = "recInnerSize"
+            )
+            val innerRadius by animateDpAsState(
+                targetValue = if (isRecording) 8.dp else 31.dp,
+                animationSpec = tween(EmberMotion.DurQuick, easing = EmberMotion.EaseOut),
+                label = "recInnerRadius"
+            )
             Box(
                 modifier = Modifier
-                    .size(80.dp)
+                    .breathe(amplitude = 1.02f, minAlpha = 0.92f, enabled = !isRecording)
+                    .size(recSize)
                     .clip(CircleShape)
                     .border(4.dp, Color.White, CircleShape)
                     .unovTap(onClick = onToggleRecording, pressedScale = 0.92f),
@@ -428,8 +450,8 @@ private fun CameraRecorderUi(
                 )
                 Box(
                     modifier = Modifier
-                        .size(if (isRecording) 32.dp else 62.dp)
-                        .clip(if (isRecording) RoundedCornerShape(8.dp) else CircleShape)
+                        .size(innerSize)
+                        .clip(RoundedCornerShape(innerRadius))
                         .background(UnovColors.Accent)
                 )
             }

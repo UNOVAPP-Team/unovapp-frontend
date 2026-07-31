@@ -59,7 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.theme.UnovAppTheme
+import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.ui.theme.breathe
+import com.unovapp.android.ui.theme.countUp
 import com.unovapp.android.ui.theme.UnovGradients
 import kotlinx.coroutines.delay
 import kotlin.random.Random
@@ -110,12 +113,9 @@ fun BattleScreen(onClose: () -> Unit) {
         }
 
         val total = (votesA + votesB).coerceAtLeast(1)
+        // Valeur brute : c'est VoteBar qui l'interpole (520 ms EaseSoft, §Écran 10).
+        // Surtout ne pas animer ici aussi — deux interpolations en série traîneraient.
         val pctA = votesA.toFloat() / total
-        val animPctA by animateFloatAsState(
-            targetValue = pctA,
-            animationSpec = tween(durationMillis = 400),
-            label = "voteBarA"
-        )
 
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             // Split videos — placeholders gradients (Mois 4 prod : 2 streams WebRTC ou RTMP)
@@ -148,7 +148,7 @@ fun BattleScreen(onClose: () -> Unit) {
 
             // Vote bar (just below VS)
             VoteBar(
-                pctA = animPctA,
+                pctA = pctA,
                 votesA = votesA,
                 votesB = votesB,
                 modifier = Modifier
@@ -253,6 +253,13 @@ private fun VoteBar(
     votesB: Int,
     modifier: Modifier = Modifier
 ) {
+    // §Écran 10 — La Ligne : sa position est INTERPOLÉE sur 520 ms (EaseSoft), jamais
+    // sautée. C'est le point de bascule du Brasier : le voir bouger fait la tension.
+    val animatedPct by animateFloatAsState(
+        targetValue = pctA.coerceIn(0f, 1f),
+        animationSpec = tween(EmberMotion.DurSlow, easing = EmberMotion.EaseSoft),
+        label = "ligneBrasier"
+    )
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
             modifier = Modifier
@@ -264,7 +271,7 @@ private fun VoteBar(
         ) {
             Box(
                 modifier = Modifier
-                    .weight(pctA.coerceAtLeast(0.001f))
+                    .weight(animatedPct.coerceAtLeast(0.001f))
                     .fillMaxHeight()
                     .background(
                         Brush.horizontalGradient(
@@ -274,7 +281,7 @@ private fun VoteBar(
             )
             Box(
                 modifier = Modifier
-                    .weight((1f - pctA).coerceAtLeast(0.001f))
+                    .weight((1f - animatedPct).coerceAtLeast(0.001f))
                     .fillMaxHeight()
                     .background(
                         Brush.horizontalGradient(
@@ -289,15 +296,17 @@ private fun VoteBar(
                 .padding(top = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val pctAInt = (pctA * 100).toInt()
+            // Le pourcentage suit la Ligne (même interpolation) ; les compteurs de votes
+            // montent en countUp raccourci à 240 ms — en direct, 520 ms serait en retard.
+            val pctAInt = (animatedPct * 100).toInt()
             Text(
-                text = "$pctAInt% · ${formatVotes(votesA)}",
+                text = "$pctAInt% · ${formatVotes(countUp(votesA, fromZero = false, durationMs = EmberMotion.DurBase))}",
                 color = Color(0xFFFF944D),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "${formatVotes(votesB)} · ${100 - pctAInt}%",
+                text = "${formatVotes(countUp(votesB, fromZero = false, durationMs = EmberMotion.DurBase))} · ${100 - pctAInt}%",
                 color = Color(0xFFFFD2A6),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
@@ -411,6 +420,9 @@ private fun CloseButton(onClose: () -> Unit) {
 private fun BattleStatusPill(seconds: Int) {
     Row(
         modifier = Modifier
+            // §Écran 10 — le direct est le seul endroit où la respiration s'accélère :
+            // 1,8 s au lieu de 3,4 s, amplitude 1.06. C'est un pouls, pas une déco.
+            .breathe(amplitude = 1.06f, minAlpha = 0.8f, periodMs = 1800)
             .clip(RoundedCornerShape(999.dp))
             .background(Color.Black.copy(alpha = 0.55f))
             .padding(horizontal = 10.dp, vertical = 5.dp),
