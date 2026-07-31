@@ -36,7 +36,13 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material.icons.outlined.CardGiftcard
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
@@ -68,7 +74,12 @@ import coil.compose.AsyncImage
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.theme.Ember
 import com.unovapp.android.ui.theme.EmberDim
+import com.unovapp.android.ui.theme.EmberMotion
+import com.unovapp.android.ui.theme.arcOpen
+import com.unovapp.android.ui.theme.breathe
+import com.unovapp.android.ui.theme.pressable
 import com.unovapp.android.ui.theme.riseIn
+import com.unovapp.android.ui.theme.staggerDelay
 import kotlin.math.abs
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -206,14 +217,15 @@ fun EmberFeedItem(
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp)
             )
 
-            // Rangée d'actions fixe : Souffler · Orbe · Étinceler (MVP, doc écran 12).
-            EmberActionRow(
-                reacted = reacted,
-                onSouffler = { onSouffler(video.id); flamePop++ },
-                onEtinceler = onEtinceler,
-                onOrbe = onOrbe,
-                modifier = Modifier.padding(top = 12.dp)
-            )
+            // AU REPOS : rien que l'Orbe (maquette écran 01). « Un seul point, sous ton
+            // pouce. Pas de barre d'onglets, pas de menu à apprendre. » Les actions et la
+            // navigation n'existent que dans l'état éveillé, convoquées par l'Orbe.
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Orbe(onClick = onOrbe, hasBadge = true, modifier = Modifier.riseIn())
+            }
         }
     }
 }
@@ -371,79 +383,50 @@ private fun EmberTimeline(
     }
 }
 
-/* ---------- Rangée d'actions : Souffler · Orbe · Étinceler ----------
- * Disposition maquette (écran 12) : un SOCLE sombre surélevé au centre, l'Orbe
- * intronisé dessus (plus grand, anneau braise, intérieur transparent qui laisse
- * voir le socle), et les deux actions latérales — plus petites, plus basses —
- * dont l'étiquette se glisse DERRIÈRE le socle (« Souf… » / « …celer »).
- * L'ordre de dessin fait tout : étiquettes → socle → cercles → Orbe. */
+/* ---------- Une action de l'arc éveillé (étiquette à gauche, pastille à droite) ---------- */
 
 @Composable
-private fun EmberActionRow(
-    reacted: Boolean,
-    onSouffler: () -> Unit,
-    onEtinceler: () -> Unit,
-    onOrbe: () -> Unit,
-    modifier: Modifier = Modifier
+private fun ArcAction(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** La Braise est la plus importante : plus grande, pleine, et elle respire. */
+    primary: Boolean = false,
+    labelColor: Color = Ember.TextDim,
+    icon: @Composable () -> Unit
 ) {
-    BoxWithConstraints(modifier = modifier.fillMaxWidth().height(122.dp)) {
-        val w = maxWidth
-        val sideDx = w * 0.24f      // écart centre → action latérale
-        val dockW = w * 0.46f       // largeur du socle
-        val dockShape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
-
-        // 1) Étiquettes (dessinées en premier → leur moitié interne passe sous le socle).
+    Row(
+        modifier = modifier.pressable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
         Text(
-            "Souffler", color = Ember.TextDim, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
-            modifier = Modifier.align(Alignment.BottomCenter).offset(x = -sideDx, y = (-10).dp)
+            label,
+            color = labelColor,
+            fontSize = 15.sp,
+            fontWeight = if (primary) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1, softWrap = false
         )
-        Text(
-            "Étinceler", color = Ember.TextDim, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
-            modifier = Modifier.align(Alignment.BottomCenter).offset(x = sideDx, y = (-10).dp)
-        )
-
-        // 2) Le socle sombre surélevé.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .width(dockW)
-                .height(106.dp)
-                .clip(dockShape)
-                .background(Ember.SurfaceWarm2)
-                .border(1.dp, Ember.Line, dockShape)
-        )
-
-        // 3) Actions latérales (au-dessus du socle → cercles intacts).
-        //    §Écran 12 : elles entrent une seule fois, puis restent immobiles (permanentes en MVP).
-        SideCircle(
-            onClick = onSouffler,
-            modifier = Modifier.align(Alignment.BottomCenter).offset(x = -sideDx, y = (-32).dp).riseIn()
-        ) {
-            Icon(
-                Icons.Filled.LocalFireDepartment, "Souffler",
-                tint = if (reacted) Ember.Braise else Ember.Text,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-        SideCircle(
-            onClick = onEtinceler,
-            modifier = Modifier.align(Alignment.BottomCenter).offset(x = sideDx, y = (-32).dp).riseIn()
-        ) {
-            SparkIcon(modifier = Modifier.size(24.dp))
-        }
-
-        // 4) L'Orbe intronisé — plus grand, surélevé, intérieur transparent.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(y = (-22).dp)
-                .size(74.dp)
-                .clip(CircleShape)
-                .border(2.dp, Ember.Braise, CircleShape)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOrbe),
-            contentAlignment = Alignment.Center
-        ) {
-            WaveIcon(modifier = Modifier.size(30.dp), color = Ember.BraisePale2)
+        if (primary) {
+            // Braise : disque plein dégradé de feu + halo, seul élément qui boucle (§3.1).
+            Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.size(72.dp)
+                        .breathe(amplitude = 1.05f, minAlpha = 0.8f)
+                        .background(Ember.radialGlow(0.5f), CircleShape)
+                )
+                Box(
+                    modifier = Modifier.size(60.dp).clip(CircleShape).background(Ember.FireGradient),
+                    contentAlignment = Alignment.Center
+                ) { icon() }
+            }
+        } else {
+            Box(
+                modifier = Modifier.size(56.dp).clip(CircleShape)
+                    .background(Ember.Bg.copy(alpha = 0.55f))
+                    .border(1.dp, Ember.Line, CircleShape),
+                contentAlignment = Alignment.Center
+            ) { icon() }
         }
     }
 }
@@ -645,12 +628,19 @@ fun OrbeNavRow(
     onNavigate: (com.unovapp.android.ui.components.MainTab) -> Unit,
     onCreate: () -> Unit,
     bottomInset: androidx.compose.ui.unit.Dp,
+    onBraise: () -> Unit = {},
+    onLueur: () -> Unit = {},
+    onEtinceler: () -> Unit = {},
+    onGarder: () -> Unit = {},
+    onOffrir: () -> Unit = {},
+    onEnvoyer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // Voile — 160 ms, opacité .35 (§Écran 02). Un tap dessus referme.
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(180)),
-        exit = fadeOut(tween(160)),
+        enter = fadeIn(tween(EmberMotion.DurQuick)),
+        exit = fadeOut(tween(EmberMotion.DurQuick)),
         modifier = Modifier.fillMaxSize()
     ) {
         Box(
@@ -660,64 +650,150 @@ fun OrbeNavRow(
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
         )
     }
+
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.9f),
-        exit = fadeOut(tween(140)),
-        modifier = modifier
+        enter = fadeIn(tween(EmberMotion.DurBase)),
+        // L'interface se retire d'un bloc, sans stagger (§Écran 02).
+        exit = fadeOut(tween(EmberMotion.DurQuick)),
+        modifier = Modifier.fillMaxSize()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = bottomInset + 18.dp, start = 12.dp, end = 12.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            NavDest("Flux", active = true) { onDismiss() }
-            NavDest("Explorer") { onNavigate(com.unovapp.android.ui.components.MainTab.Search) }
-            // Le « + » central — création, en lagune (accent produit).
-            Box(
+        Box(modifier = Modifier.fillMaxSize()) {
+            // ── L'ARC DE RÉACTIONS : vertical, collé à droite, il se déplie VERS LE HAUT
+            //    depuis l'Orbe. Ordre d'arrivée : la Braise d'abord (la plus importante),
+            //    puis on remonte — stagger 28 ms (§Écran 02).
+            Column(
                 modifier = Modifier
-                    .size(EmberDim.Orbe)
-                    .clip(CircleShape)
-                    .background(Ember.Bg.copy(alpha = 0.7f))
-                    .border(1.5.dp, Ember.Lagune, CircleShape)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onCreate),
-                contentAlignment = Alignment.Center
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = bottomInset + 132.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("+", color = Ember.Lagune, fontSize = 28.sp, fontWeight = FontWeight.Light)
+                ArcAction("Envoyer", onEnvoyer, Modifier.arcOpen(delayMs = staggerDelay(5, 28))) {
+                    Icon(Icons.AutoMirrored.Filled.Send, "Envoyer", tint = Ember.Text, modifier = Modifier.size(22.dp))
+                }
+                ArcAction("Offrir", onOffrir, Modifier.arcOpen(delayMs = staggerDelay(4, 28))) {
+                    Icon(Icons.Outlined.CardGiftcard, "Offrir", tint = Ember.Text, modifier = Modifier.size(22.dp))
+                }
+                ArcAction("Garder", onGarder, Modifier.arcOpen(delayMs = staggerDelay(3, 28))) {
+                    Icon(Icons.Outlined.BookmarkBorder, "Garder", tint = Ember.Text, modifier = Modifier.size(22.dp))
+                }
+                ArcAction("Étinceler", onEtinceler, Modifier.arcOpen(delayMs = staggerDelay(2, 28))) {
+                    SparkIcon(modifier = Modifier.size(22.dp))
+                }
+                ArcAction("Lueur · gratuit", onLueur, Modifier.arcOpen(delayMs = staggerDelay(1, 28))) {
+                    LueurIcon(modifier = Modifier.size(22.dp))
+                }
+                // La Braise arrive EN PREMIER (delay 0) et reste le seul élément qui boucle.
+                ArcAction(
+                    "Braise · jeton", onBraise,
+                    Modifier.arcOpen(delayMs = 0),
+                    primary = true,
+                    labelColor = Ember.Braise
+                ) {
+                    Icon(Icons.Filled.LocalFireDepartment, "Braise", tint = Ember.BraisePale2, modifier = Modifier.size(26.dp))
+                }
             }
-            NavDest("Pulsations", badge = true) { onNavigate(com.unovapp.android.ui.components.MainTab.Inbox) }
-            NavDest("Univers") { onNavigate(com.unovapp.android.ui.components.MainTab.Profile) }
+
+            // ── LA RANGÉE DE NAVIGATION, au-dessus de l'Orbe : Flux · Explorer · + · Pulsations · Univers.
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(bottom = bottomInset + 96.dp, start = 10.dp, end = 10.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                // Stagger depuis le centre vers l'extérieur (le « + » en premier).
+                NavDest("Flux", active = true, modifier = Modifier.arcOpen(delayMs = staggerDelay(2, 28))) { onDismiss() }
+                NavDest("Explorer", modifier = Modifier.arcOpen(delayMs = staggerDelay(1, 28))) {
+                    onNavigate(com.unovapp.android.ui.components.MainTab.Search)
+                }
+                // Le « + » central — création, en lagune (couleur réservée à l'IA/produit).
+                Box(
+                    modifier = Modifier
+                        .arcOpen(delayMs = 0)
+                        .size(EmberDim.Orbe)
+                        .clip(CircleShape)
+                        .background(Ember.Bg.copy(alpha = 0.7f))
+                        .border(1.5.dp, Ember.Lagune, CircleShape)
+                        .pressable(onClick = onCreate),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+", color = Ember.Lagune, fontSize = 28.sp, fontWeight = FontWeight.Light)
+                }
+                NavDest("Pulsations", badge = true, modifier = Modifier.arcOpen(delayMs = staggerDelay(1, 28))) {
+                    onNavigate(com.unovapp.android.ui.components.MainTab.Inbox)
+                }
+                NavDest("Univers", modifier = Modifier.arcOpen(delayMs = staggerDelay(2, 28))) {
+                    onNavigate(com.unovapp.android.ui.components.MainTab.Profile)
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun NavDest(label: String, active: Boolean = false, badge: Boolean = false, onClick: () -> Unit) {
+private fun NavDest(
+    label: String,
+    active: Boolean = false,
+    badge: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(4.dp)
+        modifier = modifier.pressable(onClick = onClick).padding(4.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(EmberDim.Touch)
                 .clip(CircleShape)
+                .background(Ember.Bg.copy(alpha = 0.55f))
                 .border(1.dp, if (active) Ember.Braise else Ember.Line, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            if (label == "Flux") WaveIcon(modifier = Modifier.size(22.dp), color = if (active) Ember.Braise else Ember.Text)
-            else Text(label.first().toString(), color = Ember.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            val tint = if (active) Ember.Braise else Ember.Text
+            when (label) {
+                "Flux" -> WaveIcon(modifier = Modifier.size(22.dp), color = tint)
+                "Explorer" -> Icon(Icons.Outlined.Search, label, tint = tint, modifier = Modifier.size(20.dp))
+                "Pulsations" -> Icon(Icons.Outlined.NotificationsNone, label, tint = tint, modifier = Modifier.size(20.dp))
+                "Univers" -> Icon(Icons.Outlined.PersonOutline, label, tint = tint, modifier = Modifier.size(21.dp))
+                else -> Text(label.first().toString(), color = tint, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+            // Pastille de non-lu — braise, débordant légèrement du cercle.
             if (badge) {
                 Box(
-                    modifier = Modifier.align(Alignment.TopEnd).size(8.dp).clip(CircleShape).background(Ember.Braise)
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 2.dp, y = (-2).dp)
+                        .size(9.dp).clip(CircleShape).background(Ember.Braise)
                 )
             }
         }
-        Text(label, color = if (active) Ember.Braise else Ember.TextDim, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(
+            label,
+            color = if (active) Ember.Braise else Ember.TextDim,
+            fontSize = 12.sp, fontWeight = FontWeight.Medium,
+            maxLines = 1, softWrap = false
+        )
+    }
+}
+
+/** La Lueur — petit soleil rayonnant (réaction gratuite). */
+@Composable
+private fun LueurIcon(modifier: Modifier = Modifier, color: Color = Ember.Text) {
+    Canvas(modifier = modifier) {
+        val c = Offset(size.width / 2f, size.height / 2f)
+        drawCircle(color, radius = size.minDimension * 0.17f, center = c)
+        val rOut = size.minDimension / 2f
+        val rIn = rOut * 0.56f
+        for (i in 0 until 8) {
+            val a = Math.toRadians((i * 45).toDouble())
+            val dx = kotlin.math.cos(a).toFloat(); val dy = kotlin.math.sin(a).toFloat()
+            drawLine(color, Offset(c.x + dx * rIn, c.y + dy * rIn), Offset(c.x + dx * rOut, c.y + dy * rOut), 2.dp.toPx(), StrokeCap.Round)
+        }
     }
 }
 

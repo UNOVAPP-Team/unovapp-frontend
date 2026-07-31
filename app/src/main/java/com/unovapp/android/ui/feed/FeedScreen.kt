@@ -305,14 +305,22 @@ fun FeedScreen(
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
-        // Rangée de navigation de l'Orbe (Flux · Explorer · + · Pulsations · Univers).
+        // État ÉVEILLÉ convoqué par l'Orbe (maquette écran 02) : l'arc vertical de
+        // réactions à droite + la rangée de navigation. Rien de tout ça n'existe au repos.
+        val orbeVideo = videos.getOrNull(pagerState.currentPage)
         OrbeNavRow(
             visible = orbeOpen,
             onDismiss = { orbeOpen = false },
             onNavigate = { orbeOpen = false; onNavigate(it) },
             onCreate = { orbeOpen = false; onOpenCreate() },
             bottomInset = navBarBottom,
-            modifier = Modifier.align(Alignment.BottomCenter)
+            // Braise = réaction payante (feuille de cadeaux) ; Lueur = réaction gratuite.
+            onBraise = { orbeOpen = false; giftSheetOpen = true },
+            onLueur = { orbeVideo?.let { feedVm.toggleLike(it.id) }; orbeOpen = false },
+            onEtinceler = { orbeOpen = false; commentsForVideoId = orbeVideo?.id },
+            onGarder = { orbeVideo?.let { feedVm.toggleSave(it.id) }; orbeOpen = false },
+            onOffrir = { orbeOpen = false; giftSheetOpen = true },
+            onEnvoyer = { orbeOpen = false; orbeVideo?.let { shareVideo(context, it) } }
         )
     }
 
