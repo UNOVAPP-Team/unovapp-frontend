@@ -54,7 +54,7 @@ interface AuthRepository {
 }
 
 /**
- * Implémentation réelle — câblée sur la passerelle `http://152.239.118.90/api/v1/` (auth).
+ * Implémentation réelle — câblée sur la passerelle `https://api.unovapp.com/api/v1/` (auth).
  *
  * Flow attendu par le backend NestJS :
  *  1. `register(email, username, password, phone?)` → tokens.

@@ -26,13 +26,13 @@ android {
         versionCode = 14
         versionName = "2.3"
 
-        // Passerelle unique (VPS Hostinger, Frankfurt). Un reverse proxy Nginx route en
-        // interne vers auth/user/social/video selon le chemin. Depuis le 2026-06-26, plus
-        // de sous-domaines Render : les 4 constantes pointent toutes sur la même base URL,
-        // ce qui garde NetworkModule (4 Retrofit) inchangé tout en unifiant l'hôte.
-        // ⚠️ HTTP en clair tant qu'il n'y a pas de domaine + SSL → cleartext autorisé pour
-        // cette IP dans res/xml/network_security_config.xml.
-        val gatewayBaseUrl = "\"http://152.239.118.90/api/v1/\""
+        // Passerelle unique, en HTTPS depuis le 2026-07-28. Un reverse proxy Nginx route
+        // en interne vers auth/user/social/video/notification selon le chemin ; les 5
+        // constantes pointent donc toutes sur la même base URL, ce qui garde
+        // NetworkModule (plusieurs Retrofit) inchangé tout en unifiant l'hôte.
+        // ⚠️ L'ancienne IP 152.239.118.90 N'EXISTE PLUS — ne pas y revenir. Le domaine
+        // étant en TLS, res/xml/network_security_config.xml n'est plus nécessaire.
+        val gatewayBaseUrl = "\"https://api.unovapp.com/api/v1/\""
         buildConfigField("String", "AUTH_BASE_URL", gatewayBaseUrl)
         buildConfigField("String", "USER_BASE_URL", gatewayBaseUrl)
         buildConfigField("String", "SOCIAL_BASE_URL", gatewayBaseUrl)
