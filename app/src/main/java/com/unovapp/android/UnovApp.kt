@@ -83,7 +83,10 @@ class UnovApp : Application() {
             .callTimeout(30, TimeUnit.SECONDS)
             .build()
         // GET public, route via la passerelle unique → réchauffe la connexion sans auth.
-        val url = BuildConfig.AUTH_BASE_URL.trimEnd('/') + "/feed?limit=1"
+        // `/health` plutôt que `/feed?limit=1` : on ne veut qu'ouvrir TCP/TLS+DNS, pas
+        // déclencher une vraie requête base de données. En prime, /health est exempté
+        // du rate limiting, alors que /feed consomme le quota de 300/min par IP.
+        val url = BuildConfig.AUTH_BASE_URL.trimEnd('/') + "/health"
 
         appScope.launch {
             runCatching {

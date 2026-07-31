@@ -20,7 +20,13 @@ interface VideoApi {
 
     /**
      * Feed principal — cursor-based. JWT optionnel (enrichit is_liked/is_saved/is_following).
-     * type = "foryou" (public) | "following" (créateurs suivis — exige le Bearer).
+     *
+     * [type] : `null` = chronologique · [FEED_FOR_YOU] = recommandation IA (JWT requis)
+     * · [FEED_FOLLOWING] = créateurs suivis (JWT requis).
+     *
+     * ⚠️ Le backend ignore SILENCIEUSEMENT une valeur inconnue et retombe sur le feed
+     * chronologique — pas de 400. On passe donc par les constantes ci-dessous plutôt
+     * que par des littéraux : une faute de frappe ne se voit pas à l'exécution.
      */
     @GET("feed")
     suspend fun feed(
@@ -28,6 +34,12 @@ interface VideoApi {
         @Query("limit")  limit: Int      = 10,
         @Query("type")   type: String?   = null
     ): FeedResponse
+
+    companion object {
+        /** Recommandation IA. Attention : underscore — `foryou` est ignoré par le backend. */
+        const val FEED_FOR_YOU = "for_you"
+        const val FEED_FOLLOWING = "following"
+    }
 
     /** Métadonnées complètes d'une vidéo (inclut hls_manifest_url + status). */
     @GET("videos/{id}")

@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.unovapp.android.data.video.VideoApi
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
@@ -277,10 +278,17 @@ fun FeedScreen(
         }
 
         // Chips du haut (Éco · 240p + toggle Suivis/Braise) — remplace l'ancien FeedHeader.
+        // La bascule pilote réellement le tri : « Suivis » demande ?type=following au
+        // backend, « Braise » retombe sur le flux chronologique.
         EmberFeedTop(
             ecoActive = ecoActive,
             mode = feedMode,
-            onToggleMode = { feedMode = it },
+            onToggleMode = { mode ->
+                feedMode = mode
+                feedVm.setFeedType(
+                    if (mode == EmberFeedMode.Suivis) VideoApi.FEED_FOLLOWING else null
+                )
+            },
             modifier = Modifier.align(Alignment.TopCenter)
         )
 

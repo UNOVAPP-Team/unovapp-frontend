@@ -33,7 +33,7 @@ class FeedPrefetchWorker(
     override suspend fun doWork(): Result {
         val deps = EntryPointAccessors.fromApplication(applicationContext, Deps::class.java)
 
-        return when (val r = deps.videoRepository().feed(limit = 12, type = "foryou")) {
+        return when (val r = deps.videoRepository().feed(limit = 12, type = VideoApi.FEED_FOR_YOU)) {
             is NetworkResult.Success -> {
                 val targets = r.data.data.mapNotNull { dto ->
                     // On saute les vidéos sans rendition (mock). Un id backend fait 36 caractères.

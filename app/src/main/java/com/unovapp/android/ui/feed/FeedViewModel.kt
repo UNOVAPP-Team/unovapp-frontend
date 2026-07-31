@@ -34,7 +34,9 @@ data class FeedState(
     val nextCursor: String?        = null,
     val hasMore: Boolean           = true,
     val currentPage: Int           = 0,
-    val currentVideoId: String?    = null
+    val currentVideoId: String?    = null,
+    /** Tri courant : `null` = chronologique (Braise) · `following` = Suivis. */
+    val feedType: String?          = null
 )
 
 @HiltViewModel
@@ -224,11 +226,21 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch { runCatching { prefetcher.prefetch(targets, max = 2) } }
     }
 
+    /**
+     * Change le tri du flux (bascule Suivis / Braise de la maquette) et recharge.
+     * Sans effet si le mode ne change pas — évite un rechargement inutile.
+     */
+    fun setFeedType(type: String?) {
+        if (_state.value.feedType == type) return
+        _state.update { it.copy(feedType = type, nextCursor = null, hasMore = true) }
+        loadFeed()
+    }
+
     fun loadFeed() {
         viewModelScope.launch {
             val rememberedVideoId = _state.value.currentVideoId
             _state.update { it.copy(isLoading = true) }
-            when (val r = videoRepository.feed()) {
+            when (val r = videoRepository.feed(type = _state.value.feedType)) {
                 is NetworkResult.Success -> {
                     // Ordre ALÉATOIRE (mesure d'attente avant l'algo backend) puis les vidéos
                     // DÉJÀ pré-téléchargées remontées en tête → l'utilisateur voit d'abord du
@@ -263,7 +275,7 @@ class FeedViewModel @Inject constructor(
         val cursor = s.nextCursor ?: return
         viewModelScope.launch {
             _state.update { it.copy(isLoadingMore = true) }
-            when (val r = videoRepository.feed(cursor = cursor)) {
+            when (val r = videoRepository.feed(cursor = cursor, type = _state.value.feedType)) {
                 is NetworkResult.Success -> {
                     mergeFollowEnrichment(r.data.data)
                     // Mélange la page suivante ET écarte les doublons : le backend paginant
