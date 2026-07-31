@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,7 +29,7 @@ import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.Videocam
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,8 +46,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.unovapp.android.data.notification.NotificationItemDto
 import com.unovapp.android.ui.components.enterFadeSlide
-import com.unovapp.android.ui.components.StaggerReveal
+import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.ui.theme.animatedAccent
+import com.unovapp.android.ui.theme.pressable
+import com.unovapp.android.ui.theme.riseIn
+import com.unovapp.android.ui.theme.staggerDelay
 
 @Composable
 fun NotificationsScreen(
@@ -92,31 +96,32 @@ fun NotificationsScreen(
 
         when {
             state.isLoading && state.items.isEmpty() ->
-                Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = UnovColors.Accent) }
+                Box(Modifier.fillMaxSize(), Alignment.Center) { BraiseLoader(color = UnovColors.Accent) }
             state.items.isEmpty() ->
                 EmptyNotifications(state.error)
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = contentPadding
             ) {
-                items(state.items, key = { it.id }) { n ->
-                    StaggerReveal(index = state.items.indexOf(n).coerceAtMost(11)) {
+                // Cascade d'entrée par index réel (§2.4, plafond 8) — `indexOf` était
+                // en O(n) par ligne et se trompait sur les doublons.
+                itemsIndexed(state.items, key = { _, n -> n.id }) { index, n ->
                     NotificationRow(
                         n = n,
                         loading = state.openingVideoId == n.data["video_id"],
                         onClick = {
                             vm.markRead(n.id)
                             n.data["video_id"]?.takeIf { it.isNotBlank() }?.let(vm::openVideo)
-                        }
+                        },
+                        modifier = Modifier.riseIn(delayMs = staggerDelay(index), key = n.id)
                     )
-                    }
                 }
                 item {
                     // Pagination : charge plus en atteignant le bas.
                     if (state.hasMore) {
                         LaunchedLoadMore(onReach = vm::loadMore)
                         Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) {
-                            CircularProgressIndicator(color = UnovColors.Accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                            BraiseLoader(color = UnovColors.Accent, modifier = Modifier.size(22.dp))
                         }
                     }
                     Spacer(Modifier.height(24.dp))
@@ -160,16 +165,28 @@ private fun EmptyNotifications(error: String?) {
 }
 
 @Composable
-private fun NotificationRow(n: NotificationItemDto, loading: Boolean = false, onClick: () -> Unit) {
+private fun NotificationRow(
+    n: NotificationItemDto,
+    loading: Boolean = false,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val (icon, tint) = iconFor(n.type)
     // Emoji du type de réaction (le backend l'envoie dans data["reaction"] quand il le connaît ;
     // à défaut il est souvent déjà dans le titre → on n'ajoute rien).
     val reactionEmoji = n.data["reaction"]?.let { reactionEmojiFor(it) }
+    // Le fond « non lu » se retire en fondu quand la notification est lue.
+    val bg = animatedAccent(
+        active = !n.isRead,
+        activeColor = UnovColors.Accent.copy(alpha = 0.06f),
+        idleColor = Color.Transparent,
+        durationMs = EmberMotion.DurSheet
+    )
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .background(if (n.isRead) Color.Transparent else UnovColors.Accent.copy(alpha = 0.06f))
-            .clickable(onClick = onClick)
+            .background(bg)
+            .pressable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -201,9 +218,9 @@ private fun NotificationRow(n: NotificationItemDto, loading: Boolean = false, on
 
         when {
             // Chargement de la vidéo liée (tap en cours).
-            loading -> CircularProgressIndicator(
+            loading -> BraiseLoader(
                 color = UnovColors.Accent,
-                strokeWidth = 2.dp,
+                
                 modifier = Modifier.size(18.dp)
             )
             // Affordance « ouvrir la vidéo concernée ».

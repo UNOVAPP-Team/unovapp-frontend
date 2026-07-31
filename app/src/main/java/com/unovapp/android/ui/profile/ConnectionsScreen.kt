@@ -19,14 +19,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,6 +58,8 @@ import com.unovapp.android.ui.components.ErrorRetry
 import com.unovapp.android.ui.components.ShimmerBox
 import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.theme.UnovAppTheme
+import com.unovapp.android.ui.theme.riseIn
+import com.unovapp.android.ui.theme.staggerDelay
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovGradients
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -224,12 +226,13 @@ fun ConnectionsScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filtered, key = { it.id }) { user ->
+                    itemsIndexed(filtered, key = { _, u -> u.id }) { index, user ->
                         ConnectionRow(
                             user = user,
                             following = s.followingIds.contains(user.id),
                             onToggleFollow = { vm.toggleFollow(user.id) },
-                            onOpen = { onOpenUser(user.id) }
+                            onOpen = { onOpenUser(user.id) },
+                            modifier = Modifier.riseIn(delayMs = staggerDelay(index), key = user.id)
                         )
                     }
                     if (s.users.size < s.total && s.filter.isBlank()) {
@@ -239,7 +242,7 @@ fun ConnectionsScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (s.loadingMore) {
-                                    CircularProgressIndicator(color = UnovColors.Accent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                                    BraiseLoader(color = UnovColors.Accent, modifier = Modifier.size(20.dp))
                                 } else {
                                     Text(
                                         text = "Charger plus",
@@ -315,10 +318,11 @@ private fun ConnectionRow(
     user: UserSummaryDto,
     following: Boolean,
     onToggleFollow: () -> Unit,
-    onOpen: () -> Unit
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(UnovColors.Surface)

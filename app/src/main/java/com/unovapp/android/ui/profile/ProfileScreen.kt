@@ -93,6 +93,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
 import com.unovapp.android.ui.challenge.ChallengeSection
 import com.unovapp.android.ui.components.Avatar
+import com.unovapp.android.ui.components.BraiseLoader
 import com.unovapp.android.ui.components.EmptyState
 import com.unovapp.android.ui.components.ParticleBurst
 import com.unovapp.android.ui.components.ErrorRetry
@@ -387,7 +388,7 @@ fun ProfileScreen(
                                     Box(
                                         modifier = Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 28.dp),
                                         contentAlignment = Alignment.Center
-                                    ) { androidx.compose.material3.CircularProgressIndicator(color = UnovColors.Accent, strokeWidth = 2.dp) }
+                                    ) { BraiseLoader(color = UnovColors.Accent) }
                                 gridVideos.isEmpty() -> {
                                     val (t, s) = when (tab) {
                                         ProfileVideoTab.Videos -> "Aucune vidéo pour l'instant" to "Tes vidéos publiées apparaîtront ici."
@@ -766,9 +767,9 @@ private fun CoverHeader(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             if (coverUploading) {
-                androidx.compose.material3.CircularProgressIndicator(
+                BraiseLoader(
                     color = UnovColors.Accent,
-                    strokeWidth = 2.dp,
+                    
                     modifier = Modifier.size(13.dp)
                 )
                 Text("Envoi…", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
@@ -1169,9 +1170,9 @@ private fun ProfileAvatar(
                     .background(Color.Black.copy(alpha = 0.55f)),
                 contentAlignment = Alignment.Center
             ) {
-                androidx.compose.material3.CircularProgressIndicator(
+                BraiseLoader(
                     color = UnovColors.Accent,
-                    strokeWidth = 2.5.dp,
+                    
                     modifier = Modifier.size(26.dp)
                 )
             }

@@ -27,7 +27,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.ui.theme.pressable
 import com.unovapp.android.ui.theme.UnovGradients
 
 @Composable
@@ -39,22 +41,22 @@ fun GoldPrimaryButton(
     isLoading: Boolean = false,
     trailingIcon: (@Composable () -> Unit)? = null
 ) {
-    val interaction = remember { MutableInteractionSource() }
     val effectiveEnabled = enabled && !isLoading
+    // L'état désactivé s'installe en fondu (jamais de saut d'opacité).
+    val fade by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (effectiveEnabled) 1f else 0.45f,
+        animationSpec = tween(EmberMotion.DurQuick, easing = EmberMotion.EaseOut),
+        label = "goldButtonAlpha"
+    )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .alpha(if (effectiveEnabled) 1f else 0.45f)
+            .alpha(fade)
             .clip(RoundedCornerShape(14.dp))
             .background(UnovGradients.Gold)
             .goldShimmer(enabled = effectiveEnabled)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                enabled = effectiveEnabled,
-                onClick = onClick
-            )
+            .pressable(onClick = onClick, enabled = effectiveEnabled)
             .padding(vertical = 16.dp, horizontal = 22.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -70,9 +72,9 @@ fun GoldPrimaryButton(
                 letterSpacing = 0.2.sp
             )
             if (isLoading) {
-                androidx.compose.material3.CircularProgressIndicator(
+                BraiseLoader(
                     color = Color(0xFF0D0D0D),
-                    strokeWidth = 2.dp,
+                    
                     modifier = Modifier.size(16.dp)
                 )
             } else {
@@ -92,7 +94,7 @@ fun OutlineCircleButton(
         modifier = modifier
             .clip(androidx.compose.foundation.shape.CircleShape)
             .background(Color.Transparent)
-            .clickable(onClick = onClick)
+            .pressable(onClick = onClick)
             .padding(PaddingValues(0.dp)),
         verticalAlignment = Alignment.CenterVertically,
         content = content
@@ -109,7 +111,7 @@ fun GhostPillButton(
         modifier = modifier
             .clip(RoundedCornerShape(999.dp))
             .background(Color.Transparent)
-            .clickable(onClick = onClick)
+            .pressable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 7.dp)
     ) {
         Text(

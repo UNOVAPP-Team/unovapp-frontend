@@ -25,7 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.animateFloatAsState
@@ -76,7 +76,7 @@ fun InterestsScreen(onDone: () -> Unit, vm: InterestsViewModel = hiltViewModel()
         Box(
             modifier = Modifier.fillMaxSize().background(UnovColors.BgBase),
             contentAlignment = Alignment.Center
-        ) { CircularProgressIndicator(color = UnovColors.Accent) }
+        ) { BraiseLoader(color = UnovColors.Accent) }
         return
     }
 
@@ -152,8 +152,8 @@ fun InterestsScreen(onDone: () -> Unit, vm: InterestsViewModel = hiltViewModel()
                 contentAlignment = Alignment.Center
             ) {
                 when {
-                    state.saving -> CircularProgressIndicator(
-                        color = Color(0xFF0D0D0D), strokeWidth = 2.dp, modifier = Modifier.size(18.dp)
+                    state.saving -> BraiseLoader(
+                        color = Color(0xFF0D0D0D), modifier = Modifier.size(18.dp)
                     )
                     enough -> Text(
                         "Continuer (${state.selected.size})",

@@ -67,7 +67,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.BuildConfig
 import com.unovapp.android.ui.components.LanguagePickerSheet
+import com.unovapp.android.ui.theme.EmberCascade
 import com.unovapp.android.ui.theme.UnovColors
+import com.unovapp.android.ui.theme.emberEnter
+import com.unovapp.android.ui.theme.pressable
 
 // TODO: remplacer par les URLs réelles où sont hébergées les pages de docs/ (lien Play Store).
 private const val URL_PRIVACY = "https://unovapp.com/privacy.html"
@@ -99,6 +102,8 @@ fun SettingsScreen(
 
     BackHandler { onClose() }
 
+    // Cascade de sections : chaque groupe de réglages entre à son tour (60 ms).
+    EmberCascade(step = 60) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -185,11 +190,12 @@ fun SettingsScreen(
         // ----- Déconnexion -----
         Row(
             modifier = Modifier
+                .emberEnter()
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .border(1.dp, UnovColors.Line, RoundedCornerShape(14.dp))
-                .clickable(onClick = onLogout)
+                .pressable(onClick = onLogout)
                 .padding(vertical = 14.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
@@ -216,10 +222,12 @@ fun SettingsScreen(
             color = UnovColors.TextMute,
             fontSize = 11.sp,
             modifier = Modifier
+                .emberEnter(dyFrom = 8.dp)
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),
             fontWeight = FontWeight.Medium
         )
+    }
     }
 
     if (langPickerOpen) {
@@ -240,16 +248,21 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsGroup(title: String, content: @Composable () -> Unit) {
+    // Sections en cascade (§2.4 : 60 ms entre sections d'écran). Pas d'accordéon :
+    // les réglages restent toujours ouverts (§Écran 09).
     Text(
         text = title.uppercase(),
         color = UnovColors.TextMute,
         fontSize = 10.sp,
         fontWeight = FontWeight.Medium,
         letterSpacing = 1.6.sp,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 8.dp)
+        modifier = Modifier
+            .emberEnter(dyFrom = 8.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 8.dp)
     )
     Column(
         modifier = Modifier
+            .emberEnter(dyFrom = 20.dp)
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(16.dp))
@@ -279,7 +292,7 @@ private fun SettingRow(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (enabled) Modifier.clickable(interactionSource = noRipple, indication = null) { onClick!!() }
+                if (enabled) Modifier.pressable(onClick = { onClick!!() })
                 else Modifier
             )
             .padding(horizontal = 14.dp, vertical = 14.dp),

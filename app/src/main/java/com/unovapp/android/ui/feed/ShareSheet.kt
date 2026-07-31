@@ -27,7 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -141,8 +141,8 @@ fun ShareSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     if (downloading) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF0D0D0D), strokeWidth = 2.dp, modifier = Modifier.size(18.dp)
+                        BraiseLoader(
+                            color = Color(0xFF0D0D0D), modifier = Modifier.size(18.dp)
                         )
                     } else {
                         Icon(Icons.Outlined.Download, "Télécharger", tint = Color(0xFF0D0D0D), modifier = Modifier.size(20.dp))

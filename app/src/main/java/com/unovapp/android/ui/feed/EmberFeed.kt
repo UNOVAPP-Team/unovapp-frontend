@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -66,6 +68,7 @@ import coil.compose.AsyncImage
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.theme.Ember
 import com.unovapp.android.ui.theme.EmberDim
+import com.unovapp.android.ui.theme.riseIn
 import kotlin.math.abs
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -209,7 +212,7 @@ fun EmberFeedItem(
                 onSouffler = { onSouffler(video.id); flamePop++ },
                 onEtinceler = onEtinceler,
                 onOrbe = onOrbe,
-                modifier = Modifier.padding(top = 18.dp, bottom = 10.dp)
+                modifier = Modifier.padding(top = 12.dp)
             )
         }
     }
@@ -368,7 +371,12 @@ private fun EmberTimeline(
     }
 }
 
-/* ---------- Rangée d'actions : Souffler · Orbe · Étinceler ---------- */
+/* ---------- Rangée d'actions : Souffler · Orbe · Étinceler ----------
+ * Disposition maquette (écran 12) : un SOCLE sombre surélevé au centre, l'Orbe
+ * intronisé dessus (plus grand, anneau braise, intérieur transparent qui laisse
+ * voir le socle), et les deux actions latérales — plus petites, plus basses —
+ * dont l'étiquette se glisse DERRIÈRE le socle (« Souf… » / « …celer »).
+ * L'ordre de dessin fait tout : étiquettes → socle → cercles → Orbe. */
 
 @Composable
 private fun EmberActionRow(
@@ -378,44 +386,81 @@ private fun EmberActionRow(
     onOrbe: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 36.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        SideAction(label = "Souffler", onClick = onSouffler) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth().height(122.dp)) {
+        val w = maxWidth
+        val sideDx = w * 0.24f      // écart centre → action latérale
+        val dockW = w * 0.46f       // largeur du socle
+        val dockShape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
+
+        // 1) Étiquettes (dessinées en premier → leur moitié interne passe sous le socle).
+        Text(
+            "Souffler", color = Ember.TextDim, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+            modifier = Modifier.align(Alignment.BottomCenter).offset(x = -sideDx, y = (-10).dp)
+        )
+        Text(
+            "Étinceler", color = Ember.TextDim, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+            modifier = Modifier.align(Alignment.BottomCenter).offset(x = sideDx, y = (-10).dp)
+        )
+
+        // 2) Le socle sombre surélevé.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .width(dockW)
+                .height(106.dp)
+                .clip(dockShape)
+                .background(Ember.SurfaceWarm2)
+                .border(1.dp, Ember.Line, dockShape)
+        )
+
+        // 3) Actions latérales (au-dessus du socle → cercles intacts).
+        //    §Écran 12 : elles entrent une seule fois, puis restent immobiles (permanentes en MVP).
+        SideCircle(
+            onClick = onSouffler,
+            modifier = Modifier.align(Alignment.BottomCenter).offset(x = -sideDx, y = (-32).dp).riseIn()
+        ) {
             Icon(
                 Icons.Filled.LocalFireDepartment, "Souffler",
                 tint = if (reacted) Ember.Braise else Ember.Text,
-                modifier = Modifier.size(26.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
-        Orbe(onClick = onOrbe)
-        SideAction(label = "Étinceler", onClick = onEtinceler) {
-            SparkIcon(modifier = Modifier.size(26.dp))
+        SideCircle(
+            onClick = onEtinceler,
+            modifier = Modifier.align(Alignment.BottomCenter).offset(x = sideDx, y = (-32).dp).riseIn()
+        ) {
+            SparkIcon(modifier = Modifier.size(24.dp))
+        }
+
+        // 4) L'Orbe intronisé — plus grand, surélevé, intérieur transparent.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .offset(y = (-22).dp)
+                .size(74.dp)
+                .clip(CircleShape)
+                .border(2.dp, Ember.Braise, CircleShape)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onOrbe),
+            contentAlignment = Alignment.Center
+        ) {
+            WaveIcon(modifier = Modifier.size(30.dp), color = Ember.BraisePale2)
         }
     }
 }
 
 @Composable
-private fun SideAction(label: String, onClick: () -> Unit, icon: @Composable () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier
-            .size(width = 64.dp, height = 66.dp)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(top = 8.dp)
-    ) {
-        Box(
-            modifier = Modifier.size(EmberDim.Touch).clip(CircleShape).border(1.dp, Ember.Line, CircleShape),
-            contentAlignment = Alignment.Center
-        ) { icon() }
-        Text(label, color = Ember.TextDim, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-    }
+private fun SideCircle(onClick: () -> Unit, modifier: Modifier = Modifier, icon: @Composable () -> Unit) {
+    Box(
+        modifier = modifier
+            .size(50.dp)
+            .clip(CircleShape)
+            .border(1.dp, Ember.Line, CircleShape)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { icon() }
 }
 
-/** L'Orbe — le point d'ancrage unique de la navigation (icône « onde », anneau braise). */
+/** L'Orbe — point d'ancrage de navigation (utilisé hors socle, ex. rangée convoquée). */
 @Composable
 fun Orbe(onClick: () -> Unit, hasBadge: Boolean = true, modifier: Modifier = Modifier) {
     Box(modifier = modifier.size(EmberDim.Orbe + 6.dp), contentAlignment = Alignment.Center) {

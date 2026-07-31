@@ -9,11 +9,16 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -29,9 +34,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.min
@@ -337,6 +344,110 @@ fun GlowPulse(
             )
         }
     }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  LA CASCADE AUTOMATIQUE — pour animer « chaque élément de chaque écran »
+ *  sans câbler un délai à la main sur des centaines d'appels.
+ *
+ *  `EmberCascade { … }` ouvre une portée : chaque `Modifier.emberEnter()`
+ *  descendant réclame son index UNE seule fois (à sa première composition,
+ *  donc dans l'ordre visuel) et en déduit son délai de cascade. Un écran
+ *  entier se chorégraphie alors en enveloppant sa racine.
+ *
+ *  Le compteur est un `Int` nu (pas du state) : le réclamer ne déclenche
+ *  aucune recomposition. Le plafond de 8 items de §2.4 reste appliqué.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+class CascadeScope(val stepMs: Int) {
+    private var next = 0
+    fun claim(): Int = next++
+    /** Repart de zéro — à appeler quand l'écran recharge un nouveau jeu de données. */
+    fun reset() { next = 0 }
+}
+
+val LocalCascade = staticCompositionLocalOf<CascadeScope?> { null }
+
+/**
+ * Ouvre une portée de cascade. [step] = délai entre items (§2.4 : 40 ms pour une
+ * liste, 50 ms pour une grille, 60 ms pour des sections d'écran).
+ * [key] relance la cascade quand il change (nouveau chargement).
+ */
+@Composable
+fun EmberCascade(step: Int = 40, key: Any? = Unit, content: @Composable () -> Unit) {
+    val scope = remember(key) { CascadeScope(step) }
+    CompositionLocalProvider(LocalCascade provides scope) { content() }
+}
+
+/**
+ * Entrée universelle : se cascade toute seule si elle est dans un [EmberCascade],
+ * sinon entre immédiatement. C'est le modifieur à poser sur n'importe quel élément
+ * d'écran pour qu'il « arrive » au lieu d'apparaître sec.
+ */
+@Composable
+fun Modifier.emberEnter(
+    dyFrom: Dp = 14.dp,
+    scaleFrom: Float = 1f,
+    durationMs: Int = EmberMotion.DurBase,
+    extraDelayMs: Int = 0
+): Modifier {
+    val scope = LocalCascade.current
+    val index = remember { scope?.claim() ?: 0 }
+    val step = scope?.stepMs ?: 40
+    return appear(
+        dyFrom = dyFrom,
+        scaleFrom = scaleFrom,
+        durationMs = durationMs,
+        delayMs = staggerDelay(index, step) + extraDelayMs
+    )
+}
+
+/** Variante lagune de la cascade : fondu pur, jamais de translation (R5). */
+@Composable
+fun Modifier.emberEnterAI(extraDelayMs: Int = 0): Modifier =
+    emberEnter(dyFrom = 0.dp, durationMs = EmberMotion.DurSheet, extraDelayMs = extraDelayMs)
+
+/* ══════════════════ Le retour tactile universel (§ « le mouvement suit le doigt ») ══════════════════
+ * Toute zone tappable devrait le porter : contraction 90 ms au doigt (--dur-instant),
+ * détente EaseOut, haptique léger. Jamais coupé, même en reduced-motion (§8 : le retour
+ * d'action est un canal indispensable) — seule l'échelle est neutralisée. */
+
+@Composable
+fun Modifier.pressable(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    pressedScale: Float = 0.96f,
+    haptic: Boolean = true
+): Modifier {
+    val reduced = LocalReducedMotion.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val haptics = LocalHapticFeedback.current
+    val scale by animateFloatAsState(
+        targetValue = if (pressed && !reduced) pressedScale else 1f,
+        animationSpec = tween(
+            if (pressed) EmberMotion.DurInstant else EmberMotion.DurQuick,
+            easing = EmberMotion.EaseOut
+        ),
+        label = "pressableScale"
+    )
+    LaunchedEffect(pressed) {
+        if (pressed && enabled && haptic) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+    return this
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
+}
+
+/** Sélection animée : la bordure/teinte d'un élément actif transite au lieu de sauter. */
+@Composable
+fun animatedAccent(active: Boolean, activeColor: Color, idleColor: Color, durationMs: Int = EmberMotion.DurQuick): Color {
+    val c by androidx.compose.animation.animateColorAsState(
+        targetValue = if (active) activeColor else idleColor,
+        animationSpec = tween(durationMs, easing = EmberMotion.EaseOut),
+        label = "animatedAccent"
+    )
+    return c
 }
 
 /* ══════════════════ Le doigt fantôme (leçon de geste — Onb 01/02/10) ══════════════════

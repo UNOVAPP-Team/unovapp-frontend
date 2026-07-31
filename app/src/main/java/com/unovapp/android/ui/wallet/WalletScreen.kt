@@ -38,7 +38,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.MonetizationOn
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -742,9 +742,9 @@ private fun PrimaryGoldButton(
                 letterSpacing = 0.2.sp
             )
             if (isLoading) {
-                CircularProgressIndicator(
+                BraiseLoader(
                     color = Color(0xFF0D0D0D),
-                    strokeWidth = 2.dp,
+                    
                     modifier = Modifier.size(16.dp)
                 )
             }

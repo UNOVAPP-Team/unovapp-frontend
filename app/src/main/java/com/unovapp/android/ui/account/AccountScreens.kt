@@ -28,7 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -89,7 +89,7 @@ private fun PrimaryButton(text: String, enabled: Boolean, loading: Boolean, onCl
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (loading) CircularProgressIndicator(color = Color(0xFF0D0D0D), strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+        if (loading) BraiseLoader(color = Color(0xFF0D0D0D), modifier = Modifier.size(18.dp))
         else Text(text, color = if (enabled) Color(0xFF0D0D0D) else UnovColors.TextMute, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }
@@ -124,7 +124,7 @@ fun SessionsScreen(onBack: () -> Unit, vm: AccountViewModel = hiltViewModel()) {
 
     AccountScaffold("Appareils connectés", onBack) {
         when {
-            state.loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = UnovColors.Accent) }
+            state.loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { BraiseLoader(color = UnovColors.Accent) }
             state.sessions.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) {
                 Text(state.error ?: "Aucune session active", color = UnovColors.TextDim, fontSize = 14.sp)
             }
@@ -226,7 +226,7 @@ fun DeleteAccountScreen(onBack: () -> Unit, onDeleted: () -> Unit, vm: AccountVi
                     .clickable(enabled = canDelete) { vm.deleteAccount(onDeleted) },
                 contentAlignment = Alignment.Center
             ) {
-                if (deleting) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                if (deleting) BraiseLoader(color = Color.White, modifier = Modifier.size(18.dp))
                 else Text("Supprimer définitivement mon compte", color = if (canDelete) Color.White else UnovColors.TextMute, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }

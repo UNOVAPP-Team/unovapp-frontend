@@ -83,9 +83,15 @@ private val UnovTypography = Typography(
 
 @Composable
 fun UnovAppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = DarkColorScheme,
-        typography = UnovTypography,
-        content = content
-    )
+    // La préférence système « réduire les animations » est fournie à tout l'arbre :
+    // chaque primitive de mouvement s'y conforme d'elle-même (accessibilité §8).
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalReducedMotion provides rememberReducedMotion()
+    ) {
+        MaterialTheme(
+            colorScheme = DarkColorScheme,
+            typography = UnovTypography,
+            content = content
+        )
+    }
 }

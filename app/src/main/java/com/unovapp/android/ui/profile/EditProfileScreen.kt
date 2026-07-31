@@ -26,7 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.activity.compose.BackHandler
@@ -129,9 +129,9 @@ fun EditProfileScreen(
                 contentAlignment = Alignment.Center
             ) {
                 if (saving) {
-                    CircularProgressIndicator(
+                    BraiseLoader(
                         color = Color(0xFF0D0D0D),
-                        strokeWidth = 2.dp,
+                        
                         modifier = Modifier.size(16.dp)
                     )
                 } else {
@@ -186,9 +186,9 @@ fun EditProfileScreen(
                                 modifier = Modifier.size(92.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                CircularProgressIndicator(
+                                BraiseLoader(
                                     color = UnovColors.Accent,
-                                    strokeWidth = 2.5.dp,
+                                    
                                     modifier = Modifier.size(28.dp)
                                 )
                             }

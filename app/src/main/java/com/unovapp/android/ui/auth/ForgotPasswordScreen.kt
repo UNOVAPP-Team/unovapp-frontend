@@ -25,7 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -212,7 +212,7 @@ private fun PrimaryButton(text: String, enabled: Boolean, loading: Boolean, onCl
         contentAlignment = Alignment.Center
     ) {
         if (loading) {
-            CircularProgressIndicator(color = Color(0xFF0D0D0D), strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            BraiseLoader(color = Color(0xFF0D0D0D), modifier = Modifier.size(18.dp))
         } else {
             Text(text, color = if (enabled) Color(0xFF0D0D0D) else UnovColors.TextMute, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }

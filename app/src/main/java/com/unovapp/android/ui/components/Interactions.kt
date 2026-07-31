@@ -32,16 +32,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import com.unovapp.android.ui.theme.EmberMotion
+import com.unovapp.android.ui.theme.LocalReducedMotion
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovMotion
 import kotlinx.coroutines.delay
 
 /**
- * Tap pressable façon "haute qualité" : scale down spring (0.96) + haptic léger au down,
- * scale up bouncy au release. C'est la signature physique d'UNOVAPP — toute zone cliquable
- * importante devrait l'utiliser.
+ * Tap pressable : contraction 0.96 + haptique légère au down, détente au release.
+ * C'est la signature physique d'UNOVAPP — toute zone cliquable importante l'utilise.
  *
- * Pas de ripple Material (incompatible avec notre design noir/or premium).
+ * Timings alignés sur la grammaire de mouvement « braise » (cf. [EmberMotion]) :
+ * contraction en `DurInstant` (90 ms), détente en `DurQuick` (160 ms), courbe EaseOut.
+ * Plus de ressort : « la braise est chaude, pas élastique ». L'échelle est neutralisée
+ * en reduced-motion, mais l'haptique — canal de retour distinct — est conservée.
+ *
+ * Pas de ripple Material (incompatible avec notre design sombre).
  */
 fun Modifier.unovTap(
     onClick: () -> Unit,
@@ -49,12 +55,16 @@ fun Modifier.unovTap(
     pressedScale: Float = 0.96f,
     haptic: Boolean = true
 ): Modifier = composed {
+    val reduced = LocalReducedMotion.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val haptics = LocalHapticFeedback.current
     val scale by animateFloatAsState(
-        targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = UnovMotion.snappy(),
+        targetValue = if (pressed && !reduced) pressedScale else 1f,
+        animationSpec = tween(
+            if (pressed) EmberMotion.DurInstant else EmberMotion.DurQuick,
+            easing = EmberMotion.EaseOut
+        ),
         label = "unovTapScale"
     )
 

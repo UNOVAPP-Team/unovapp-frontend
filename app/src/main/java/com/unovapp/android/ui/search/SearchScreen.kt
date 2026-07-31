@@ -1,8 +1,10 @@
 package com.unovapp.android.ui.search
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -37,7 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -55,7 +57,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.unovTap
+import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.UnovAppTheme
+import com.unovapp.android.ui.theme.animatedAccent
+import com.unovapp.android.ui.theme.riseIn
+import com.unovapp.android.ui.theme.staggerDelay
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.data.user.UserSummaryDto
 import com.unovapp.android.ui.components.Avatar
@@ -174,12 +180,13 @@ private fun UserSearchResults(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(state.results) { user ->
+            itemsIndexed(state.results, key = { _, u -> u.id }) { index, user ->
                 UserResultRow(
                     user = user,
                     following = state.followingIds.contains(user.id),
                     onFollow = { onToggleFollow(user.id) },
-                    onOpen = { onOpenUser(user) }
+                    onOpen = { onOpenUser(user) },
+                    modifier = Modifier.riseIn(delayMs = staggerDelay(index), key = user.id)
                 )
             }
         }
@@ -187,9 +194,15 @@ private fun UserSearchResults(
 }
 
 @Composable
-private fun UserResultRow(user: UserSummaryDto, following: Boolean, onFollow: () -> Unit, onOpen: () -> Unit) {
+private fun UserResultRow(
+    user: UserSummaryDto,
+    following: Boolean,
+    onFollow: () -> Unit,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(UnovColors.Surface)
@@ -213,6 +226,12 @@ private fun UserResultRow(user: UserSummaryDto, following: Boolean, onFollow: ()
                 Text(user.displayName, color = UnovColors.TextMute, fontSize = 12.sp)
             }
         }
+        // Suivre → Suivi : morph de largeur (jamais disparition/réapparition), teinte interpolée.
+        val followTint = animatedAccent(
+            active = following,
+            activeColor = UnovColors.TextDim,
+            idleColor = Color(0xFF0D0D0D)
+        )
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
@@ -221,11 +240,12 @@ private fun UserResultRow(user: UserSummaryDto, following: Boolean, onFollow: ()
                     else Modifier.background(UnovGradients.Gold)
                 )
                 .unovTap(onClick = onFollow, pressedScale = 0.94f)
+                .animateContentSize(tween(EmberMotion.DurSheet, easing = EmberMotion.EaseOut))
                 .padding(horizontal = 16.dp, vertical = 7.dp)
         ) {
             Text(
                 text = if (following) "Suivi" else "Suivre",
-                color = if (following) UnovColors.TextDim else Color(0xFF0D0D0D),
+                color = followTint,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )

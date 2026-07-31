@@ -90,7 +90,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.CircularProgressIndicator
+import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
@@ -287,11 +287,9 @@ private fun UploadOverlay(
         ) {
             when (phase) {
                 PublishPhase.Uploading -> {
-                    @Suppress("DEPRECATION")
-                    CircularProgressIndicator(
+                    BraiseLoader(
                         progress = progress.coerceIn(0f, 1f),
                         color = UnovColors.Accent,
-                        strokeWidth = 3.dp,
                         modifier = Modifier.size(64.dp)
                     )
                     Spacer(Modifier.height(20.dp))
@@ -299,7 +297,7 @@ private fun UploadOverlay(
                     Text("Garde l'app ouverte.", color = UnovColors.TextMute, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
                 PublishPhase.Processing -> {
-                    CircularProgressIndicator(color = UnovColors.Accent, strokeWidth = 3.dp, modifier = Modifier.size(64.dp))
+                    BraiseLoader(color = UnovColors.Accent, modifier = Modifier.size(64.dp))
                     Spacer(Modifier.height(20.dp))
                     Text("Traitement en cours…", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     Text(
