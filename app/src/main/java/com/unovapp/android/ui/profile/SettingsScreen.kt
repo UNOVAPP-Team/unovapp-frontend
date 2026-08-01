@@ -67,6 +67,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.BuildConfig
 import com.unovapp.android.ui.components.LanguagePickerSheet
+import com.unovapp.android.ui.components.EmberBody
+import com.unovapp.android.ui.components.EmberCard
+import com.unovapp.android.ui.components.EmberEyebrow
+import com.unovapp.android.ui.components.EmberScreenTitle
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberFont
 import com.unovapp.android.ui.theme.EmberCascade
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.emberEnter
@@ -111,24 +117,17 @@ fun SettingsScreen(
             .windowInsetsPadding(WindowInsets.systemBars)
             .verticalScroll(rememberScrollState())
     ) {
-        // Top bar
+        // Top bar — titre XXL de la maquette (écran 09).
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(start = 12.dp, end = 20.dp, top = 10.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             CircleIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Retour", onClick = onClose)
-            Text(
-                text = "Paramètres et confidentialité",
-                color = Color.White,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold
-            )
+            EmberScreenTitle("Réglages", modifier = Modifier.emberEnter(dyFrom = 8.dp))
         }
-
-        Spacer(Modifier.height(4.dp))
 
         // ----- Compte -----
         SettingsGroup("Compte") {
@@ -187,31 +186,21 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        // ----- Déconnexion -----
-        Row(
+        // ----- Déconnexion — simple texte braise centré, comme la maquette -----
+        Box(
             modifier = Modifier
                 .emberEnter()
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, UnovColors.Line, RoundedCornerShape(14.dp))
                 .pressable(onClick = onLogout)
-                .padding(vertical = 14.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(vertical = 20.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.Logout,
-                contentDescription = null,
-                tint = UnovColors.Danger,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(Modifier.size(8.dp))
             Text(
                 text = "Se déconnecter",
-                color = UnovColors.Danger,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
+                color = Ember.Braise,
+                fontFamily = EmberFont,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -246,30 +235,36 @@ fun SettingsScreen(
     }
 }
 
+/**
+ * Une section de réglages, à la maquette (écran 09) : l'eyebrow vit DANS la carte,
+ * pas au-dessus. [lagune] pour la section IA — c'est la couleur qui signale que
+ * ces réglages pilotent l'IA, et le point qui la précède le confirme.
+ *
+ * Pas d'accordéon : les sections restent toujours ouvertes (§Écran 09).
+ */
 @Composable
-private fun SettingsGroup(title: String, content: @Composable () -> Unit) {
-    // Sections en cascade (§2.4 : 60 ms entre sections d'écran). Pas d'accordéon :
-    // les réglages restent toujours ouverts (§Écran 09).
-    Text(
-        text = title.uppercase(),
-        color = UnovColors.TextMute,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Medium,
-        letterSpacing = 1.6.sp,
+private fun SettingsGroup(
+    title: String,
+    lagune: Boolean = false,
+    footer: String? = null,
+    content: @Composable () -> Unit
+) {
+    EmberCard(
         modifier = Modifier
-            .emberEnter(dyFrom = 8.dp)
-            .padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 8.dp)
-    )
-    Column(
-        modifier = Modifier
-            .emberEnter(dyFrom = 20.dp)
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(UnovColors.Surface)
-            .border(1.dp, UnovColors.Line, RoundedCornerShape(16.dp))
+            .padding(horizontal = 20.dp, vertical = 7.dp)
+            .emberEnter(dyFrom = 20.dp),
+        lagune = lagune
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (lagune) Box(Modifier.size(8.dp).clip(CircleShape).background(Ember.Lagune))
+            EmberEyebrow(title, lagune = lagune)
+        }
+        Spacer(Modifier.height(6.dp))
         content()
+        if (footer != null) {
+            Spacer(Modifier.height(10.dp))
+            EmberBody(footer, color = Ember.TextMute, size = 14)
+        }
     }
 }
 
@@ -308,8 +303,9 @@ private fun SettingRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                color = if (soon) UnovColors.TextDim else tint,
-                fontSize = 14.sp,
+                color = if (soon) Ember.TextDim else tint,
+                fontFamily = EmberFont,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
             if (subtitle != null) {
