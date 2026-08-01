@@ -678,6 +678,13 @@ fun OrbeNavRow(
     onGarder: () -> Unit = {},
     onOffrir: () -> Unit = {},
     onEnvoyer: () -> Unit = {},
+    /**
+     * L'arc de réactions n'a de sens que sur le Flux (il agit sur une vidéo).
+     * Ailleurs, l'Orbe ne convoque que la navigation.
+     */
+    showReactions: Boolean = true,
+    /** Destination active, pour l'accent braise dans la rangée. */
+    activeTab: com.unovapp.android.ui.components.MainTab = com.unovapp.android.ui.components.MainTab.Feed,
     modifier: Modifier = Modifier
 ) {
     // Voile — 160 ms, opacité .35 (§Écran 02). Un tap dessus referme.
@@ -714,7 +721,7 @@ fun OrbeNavRow(
             // ── L'ARC DE RÉACTIONS : vertical, collé à droite, il se déplie VERS LE HAUT
             //    depuis l'Orbe. Ordre d'arrivée : la Braise d'abord (la plus importante),
             //    puis on remonte — stagger 28 ms (§Écran 02).
-            Column(
+            if (showReactions) Column(
                 modifier = Modifier
                     // Dégagement calculé : Orbe (~74) + rangée de nav (~78) + marge.
                     .align(Alignment.BottomEnd)
@@ -783,14 +790,15 @@ fun OrbeNavRow(
 
                 // Les items sont ancrés en bas-centre ; `sagOuter` sert de ligne de base
                 // pour que le sommet (le « + ») soit le point le plus haut.
-                NavDest(
-                    "Flux", active = true,
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                        .offset(x = -dxOuter, y = sagOuter - sagOuter).emanate(2)
-                ) { onDismiss() }
 
                 NavDest(
-                    "Explorer",
+                    "Flux", active = activeTab == com.unovapp.android.ui.components.MainTab.Feed,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .offset(x = -dxOuter, y = sagOuter - sagOuter).emanate(2)
+                ) { if (activeTab == com.unovapp.android.ui.components.MainTab.Feed) onDismiss() else onNavigate(com.unovapp.android.ui.components.MainTab.Feed) }
+
+                NavDest(
+                    "Explorer", active = activeTab == com.unovapp.android.ui.components.MainTab.Search,
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .offset(x = -dxMid, y = sagMid - sagOuter).emanate(1)
                 ) { onNavigate(com.unovapp.android.ui.components.MainTab.Search) }
@@ -806,13 +814,13 @@ fun OrbeNavRow(
                 )
 
                 NavDest(
-                    "Pulsations", badge = true,
+                    "Pulsations", active = activeTab == com.unovapp.android.ui.components.MainTab.Inbox, badge = true,
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .offset(x = dxMid, y = sagMid - sagOuter).emanate(1)
                 ) { onNavigate(com.unovapp.android.ui.components.MainTab.Inbox) }
 
                 NavDest(
-                    "Univers",
+                    "Univers", active = activeTab == com.unovapp.android.ui.components.MainTab.Profile,
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .offset(x = dxOuter, y = sagOuter - sagOuter).emanate(2)
                 ) { onNavigate(com.unovapp.android.ui.components.MainTab.Profile) }

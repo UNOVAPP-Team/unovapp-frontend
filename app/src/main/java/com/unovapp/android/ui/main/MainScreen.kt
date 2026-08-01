@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,7 +43,14 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.dp
 import com.unovapp.android.ui.create.CreateScreen
 import com.unovapp.android.ui.battle.BattleScreen
-import com.unovapp.android.ui.components.BottomNav
+import com.unovapp.android.ui.components.EmberOrbeBar
+import com.unovapp.android.ui.components.PulseGlyph
+import com.unovapp.android.ui.theme.Ember
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.windowInsetsPadding
 import com.unovapp.android.ui.components.MainTab
 import com.unovapp.android.ui.components.WatermarkFloat
 import com.unovapp.android.ui.feed.FeedScreen
@@ -100,6 +108,8 @@ fun MainScreen(
         val tabHistory = remember { mutableStateListOf<MainTab>() }
         var overlay by remember { mutableStateOf<Overlay?>(null) }
         var showCreate by remember { mutableStateOf(false) }
+        // Navigation convoquée par l'Orbe sur les écrans hors Flux.
+        var orbeOpen by remember { mutableStateOf(false) }
         val people = remember { mutableStateListOf<People>() }
         fun popPeople() { if (people.isNotEmpty()) people.removeAt(people.lastIndex) }
 
@@ -215,15 +225,38 @@ fun MainScreen(
                 }
             }
 
-            // BottomNav — masquée sur le Flux (nouvelle maquette : seul l'Orbe navigue).
-            // Conservée sur les autres onglets, le temps de migrer chacun vers l'Orbe.
+            // Plus de barre d'onglets nulle part : « Un seul point, sous ton pouce. »
+            // Le Flux porte son propre Orbe (il pilote aussi l'arc de réactions) ; les
+            // autres écrans reçoivent ici le même Orbe, qui ne convoque que la navigation.
             if (tab != MainTab.Feed) {
-                BottomNav(
-                    active = tab,
-                    onTabChange = { navigateToTab(it) },
-                    onCreate = { showCreate = true },
-                    inboxUnread = inboxUnread,
-                    modifier = Modifier.align(Alignment.BottomCenter)
+                EmberOrbeBar(
+                    onClick = { orbeOpen = true },
+                    hasBadge = inboxUnread > 0,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                ) {
+                    // Le glyphe suit l'écran courant (pouls sur Pulsations, etc.).
+                    when (tab) {
+                        MainTab.Inbox -> PulseGlyph(Modifier.size(24.dp), color = Ember.BraisePale2)
+                        MainTab.Search -> Icon(
+                            Icons.Outlined.Search, "Explorer",
+                            tint = Ember.BraisePale2, modifier = Modifier.size(22.dp)
+                        )
+                        else -> Icon(
+                            Icons.Outlined.PersonOutline, "Univers",
+                            tint = Ember.BraisePale2, modifier = Modifier.size(23.dp)
+                        )
+                    }
+                }
+                com.unovapp.android.ui.feed.OrbeNavRow(
+                    visible = orbeOpen,
+                    onDismiss = { orbeOpen = false },
+                    onNavigate = { orbeOpen = false; navigateToTab(it) },
+                    onCreate = { orbeOpen = false; showCreate = true },
+                    bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                    showReactions = false,
+                    activeTab = tab
                 )
             }
 
