@@ -316,6 +316,61 @@ fun EmberOrbeBar(
     }
 }
 
+/**
+ * Une statistique en ANNEAU — la signature d'Univers (écran 06) : un cercle dont
+ * l'arc se remplit, le nombre au centre, le libellé dessous.
+ *
+ * L'anneau se remplit en `ringFill` (520 ms, sens horaire depuis midi, §3.6) et le
+ * nombre monte en `countUp` : aucun chiffre n'apparaît par substitution.
+ * [primary] met la métrique qui compte (les Braises) en pleine braise.
+ */
+@Composable
+fun EmberRingStat(
+    value: Int,
+    label: String,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    /** Remplissage 0..1 de l'anneau — proportion visuelle, pas une valeur absolue. */
+    fill: Float = 0.72f,
+    delayMs: Int = 0,
+    onClick: (() -> Unit)? = null
+) {
+    val p by animatedProgress(fill.coerceIn(0f, 1f), durationMs = EmberMotion.DurSlow, delayMs = delayMs)
+    val ringColor = if (primary) Ember.Braise else Ember.BraiseClair
+    val ringSize = if (primary) 108.dp else 96.dp
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.then(if (onClick != null) Modifier.pressable(onClick = onClick) else Modifier)
+    ) {
+        Box(modifier = Modifier.size(ringSize), contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(ringSize)) {
+                val stroke = (if (primary) 5f else 4f).dp.toPx()
+                drawCircle(
+                    color = Ember.Line,
+                    radius = (size.minDimension - stroke) / 2f,
+                    style = Stroke(stroke)
+                )
+                drawArc(
+                    color = ringColor,
+                    startAngle = -90f, sweepAngle = 360f * p, useCenter = false,
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                    size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+                )
+            }
+            Text(
+                "${com.unovapp.android.ui.theme.countUp(value)}",
+                color = if (primary) Ember.Braise else Ember.Text,
+                fontSize = if (primary) 34.sp else 28.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = EmberFont
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        EmberBody(label, color = Ember.TextDim, size = 14, maxLines = 1)
+    }
+}
+
 /** Séparateur fin des cartes. */
 @Composable
 fun EmberDivider(modifier: Modifier = Modifier) {

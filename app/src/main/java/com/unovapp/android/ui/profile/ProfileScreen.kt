@@ -94,6 +94,7 @@ import androidx.compose.ui.geometry.Offset
 import com.unovapp.android.ui.challenge.ChallengeSection
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.BraiseLoader
+import com.unovapp.android.ui.components.EmberRingStat
 import com.unovapp.android.ui.components.EmptyState
 import com.unovapp.android.ui.components.ParticleBurst
 import com.unovapp.android.ui.components.ErrorRetry
@@ -1218,43 +1219,37 @@ private fun StatsTrio(
     onOpenFollowers: () -> Unit = {},
     onOpenFollowing: () -> Unit = {}
 ) {
+    // Univers (écran 06) : trois ANNEAUX, pas trois colonnes de chiffres. Les Braises
+    // sont au centre et en pleine braise — c'est la métrique qui compte.
+    // Vocabulaire produit : « Fidèle » = abonné, « Braise » = réaction reçue.
+    // La maquette montre « Séries » en troisième ; la fonctionnalité n'existe pas
+    // encore, donc on affiche les vidéos plutôt que d'inventer un compteur vide.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(top = 6.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        // Ordre de la maquette : Abonnements · Abonnés · J'aime
-        StatTile(
-            value = state.followingFmt,
-            rawValue = state.followingCount,
-            label = "Abonnements",
-            trend = null,
-            sparkValues = null,
-            popIndex = 0,
-            onClick = onOpenFollowing,
-            modifier = Modifier.weight(1f)
+        EmberRingStat(
+            value = state.followersCount,
+            label = "Fidèles",
+            fill = 0.55f,
+            delayMs = 0,
+            onClick = onOpenFollowers
         )
-        StatDivider()
-        StatTile(
-            value = state.followersFmt,
-            rawValue = state.followersCount,
-            label = "Abonnés",
-            trend = null,
-            sparkValues = null,
-            popIndex = 1,
-            onClick = onOpenFollowers,
-            modifier = Modifier.weight(1f)
+        EmberRingStat(
+            value = state.likesCount,
+            label = "Braises",
+            primary = true,
+            fill = 0.82f,
+            delayMs = 60
         )
-        StatDivider()
-        StatTile(
-            value = state.likesFmt,
-            rawValue = state.likesCount,
-            label = "J'aime",
-            trend = null,
-            sparkValues = null,
-            popIndex = 2,
-            modifier = Modifier.weight(1f)
+        EmberRingStat(
+            value = state.videosCount,
+            label = "Vidéos",
+            fill = 0.4f,
+            delayMs = 120
         )
     }
 }
