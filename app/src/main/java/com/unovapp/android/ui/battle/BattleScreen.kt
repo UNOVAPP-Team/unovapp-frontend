@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.theme.UnovAppTheme
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberFont
 import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.breathe
@@ -279,13 +281,15 @@ private fun VoteBar(
                         )
                     )
             )
+            // Camp B est en OR, pas en brun sombre : la maquette oppose deux
+            // identités (braise vs or), elle ne montre pas un camp éteint.
             Box(
                 modifier = Modifier
                     .weight((1f - animatedPct).coerceAtLeast(0.001f))
                     .fillMaxHeight()
                     .background(
                         Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF2A1606), Color(0xFF1A0E00))
+                            colors = listOf(Ember.Gold, Color(0xFFC9A03C))
                         )
                     )
             )
@@ -298,18 +302,29 @@ private fun VoteBar(
         ) {
             // Le pourcentage suit la Ligne (même interpolation) ; les compteurs de votes
             // montent en countUp raccourci à 240 ms — en direct, 520 ms serait en retard.
+            // Les pourcentages en gros, dans la couleur de leur camp, avec la phrase
+            // de la maquette entre les deux — « la Ligne penche à chaque souffle ».
             val pctAInt = (animatedPct * 100).toInt()
             Text(
-                text = "$pctAInt% · ${formatVotes(countUp(votesA, fromZero = false, durationMs = EmberMotion.DurBase))}",
-                color = Color(0xFFFF944D),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+                text = "$pctAInt %",
+                color = Ember.Braise,
+                fontFamily = EmberFont,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black
             )
             Text(
-                text = "${formatVotes(countUp(votesB, fromZero = false, durationMs = EmberMotion.DurBase))} · ${100 - pctAInt}%",
-                color = Color(0xFFFFD2A6),
+                text = "la Ligne penche à chaque souffle",
+                color = Ember.TextMute,
+                fontFamily = EmberFont,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+            Text(
+                text = "${100 - pctAInt} %",
+                color = Ember.Gold,
+                fontFamily = EmberFont,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black
             )
         }
     }
@@ -435,10 +450,12 @@ private fun BattleStatusPill(seconds: Int) {
             tint = UnovColors.Accent,
             modifier = Modifier.size(12.dp)
         )
+        // Vocabulaire produit : c'est LE BRASIER, pas un « battle ».
         Text(
-            text = "BATTLE · 0:${seconds.toString().padStart(2, '0')}",
-            color = Color.White,
-            fontSize = 11.sp,
+            text = "EN DIRECT · 0:${seconds.toString().padStart(2, '0')}",
+            color = Ember.Text,
+            fontFamily = EmberFont,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.2.sp
         )
