@@ -286,7 +286,8 @@ fun FeedScreen(
                 onOpenProfile = { creatorId -> if (creatorId.isNotBlank()) onOpenProfile(creatorId) },
                 onOrbe = { orbeOpen = true },
                 bottomInset = navBarBottom + 12.dp,
-                awakened = orbeOpen && page == pagerState.currentPage
+                awakened = orbeOpen && page == pagerState.currentPage,
+                spark = feedState.sparks[videos[page].id]
             )
             }
         }
@@ -312,7 +313,11 @@ fun FeedScreen(
         // Timer d'inactivité (§10.5) : l'état éveillé se retire tout seul après
         // 3,2 s sans interaction. L'interface du Flux n'existe que le temps d'un geste.
         LaunchedEffect(orbeOpen) {
-            if (orbeOpen) { delay(3_200); orbeOpen = false }
+            if (orbeOpen) {
+                // Charge l'étincelle à mettre en avant, puis referme après 3,2 s.
+                orbeVideo?.id?.let { feedVm.loadSpark(it) }
+                delay(3_200); orbeOpen = false
+            }
         }
         OrbeNavRow(
             visible = orbeOpen,

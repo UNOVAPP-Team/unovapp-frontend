@@ -42,7 +42,13 @@ data class FeedState(
      * Une liste vide n'est pas une erreur : « Suivis » sans abonnement renvoie
      * légitimement 0 vidéo — il ne faut pas accuser la connexion dans ce cas.
      */
-    val loadFailed: Boolean        = false
+    val loadFailed: Boolean        = false,
+    /**
+     * Étincelle mise en avant par vidéo, pour la bulle de l'état éveillé.
+     * La valeur peut être `null` : cela veut dire « vérifié, cette vidéo n'a pas
+     * de commentaire » — et évite de redemander au serveur à chaque ouverture.
+     */
+    val sparks: Map<String, SparkPreview?> = emptyMap()
 )
 
 @HiltViewModel
@@ -230,6 +236,34 @@ class FeedViewModel @Inject constructor(
         }
         if (targets.isEmpty()) return
         viewModelScope.launch { runCatching { prefetcher.prefetch(targets, max = 2) } }
+    }
+
+    /**
+     * Charge l'étincelle à mettre en avant sous la vidéo courante (bulle de l'état
+     * éveillé, §5.2). Une seule requête par vidéo, mémorisée : l'éveil est furtif
+     * (3,2 s) et l'utilisateur peut l'ouvrir plusieurs fois de suite.
+     *
+     * Si la vidéo n'a aucun commentaire, on ne montre pas de bulle — plutôt rien
+     * qu'une citation inventée.
+     */
+    fun loadSpark(videoId: String) {
+        if (videoId.isBlank() || _state.value.sparks.containsKey(videoId)) return
+        viewModelScope.launch {
+            when (val r = socialRepository.comments(videoId)) {
+                is NetworkResult.Success -> {
+                    val top = r.data.data
+                        .filter { !it.content.isNullOrBlank() && !it.username.isNullOrBlank() }
+                        // La plus « chaude » d'abord : c'est celle qui mérite la vitrine.
+                        .maxByOrNull { it.likesCount }
+                    val preview = top?.let {
+                        SparkPreview(quote = it.content!!.trim(), author = "@${it.username}")
+                    }
+                    // On mémorise même l'absence (valeur nulle) : pas de re-requête inutile.
+                    _state.update { s -> s.copy(sparks = s.sparks + (videoId to preview)) }
+                }
+                is NetworkResult.Failure -> Unit   // silencieux : la bulle est un bonus
+            }
+        }
     }
 
     /**

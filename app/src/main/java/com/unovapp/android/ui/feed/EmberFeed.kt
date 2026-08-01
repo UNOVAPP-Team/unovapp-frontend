@@ -92,6 +92,9 @@ import kotlin.math.abs
 /** Modes de tri du feed MVP (toggle en haut à droite) — sans algorithme (pas d'IA). */
 enum class EmberFeedMode { Suivis, Braise }
 
+/** Une étincelle mise en avant sous la vidéo (citation + auteur réels). */
+data class SparkPreview(val quote: String, val author: String)
+
 /**
  * Une page du Flux, version maquette. Vidéo plein écran ; au repos, seul le bloc créateur,
  * la légende, la ligne de temps (avec étincelles) et la rangée Souffler · Orbe · Étinceler.
@@ -119,7 +122,9 @@ fun EmberFeedItem(
      * NI le bloc créateur NI la légende : la place revient à l'arc et à la navigation.
      * On les retire donc, au lieu de les laisser transparaître sous le voile.
      */
-    awakened: Boolean = false
+    awakened: Boolean = false,
+    /** L'étincelle mise en avant sur cette vidéo, si elle en a une. */
+    spark: SparkPreview? = null
 ) {
     // Double-tap = souffler (réaction) avec pop de flamme sous le doigt.
     var flamePop by remember(video.id) { mutableIntStateOf(0) }
@@ -218,6 +223,18 @@ fun EmberFeedItem(
                         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp)
                     )
                 }
+            }
+
+            // La bulle d'étincelle : au-dessus de la ligne de temps, en éveil seulement,
+            // et seulement si une vraie étincelle existe sur cette vidéo (§5.2).
+            if (awakened && spark != null) {
+                SparkBubble(
+                    quote = spark.quote,
+                    author = spark.author,
+                    modifier = Modifier
+                        .padding(start = 24.dp, end = 24.dp, bottom = 10.dp)
+                        .appear(dyFrom = 12.dp, durationMs = EmberMotion.DurSheet, delayMs = 200)
+                )
             }
 
             // Ligne de temps + étincelles + durée — visible dans les deux états.
@@ -352,6 +369,56 @@ private fun HeatRingAvatar(
             } else {
                 Avatar(idx = avatarIdx, name = name, size = 42.dp)
             }
+        }
+    }
+}
+
+/**
+ * La BULLE D'ÉTINCELLE ANCRÉE (spec Flux §5.2) — la citation d'un lecteur, posée
+ * juste au-dessus de la ligne de temps en état éveillé.
+ *
+ * Géométrie normative : retrait de 26 % depuis la gauche du conteneur (le bord
+ * gauche tombe à x = 113 sur un cadre de 390), largeur max 250, coins 12, verre
+ * dépoli. Elle entre en `sheetUp` miniature — 12 px, 320 ms, délai 200 ms — donc
+ * après l'arc et la navigation : c'est le dernier élément à se poser.
+ *
+ * L'attribution ne porte PAS d'horodatage : l'API ne stocke aucun ancrage
+ * temporel pour les commentaires (pas de champ dans CommentDto). La maquette
+ * montre « étincelle à 0:04 » ; l'inventer serait afficher une donnée fausse.
+ */
+@Composable
+private fun SparkBubble(
+    quote: String,
+    author: String,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.74f)                 // ≈ max 250 sur 342 utiles
+                .padding(start = 89.dp)              // 26 % du conteneur (§5.2)
+                .clip(shape)
+                .background(Color(0xFF0D0804).copy(alpha = 0.75f))
+                .border(1.dp, Ember.Text.copy(alpha = 0.14f), shape)
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text(
+                text = "« $quote »",
+                color = Ember.Text.copy(alpha = 0.9f),
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "$author · étincelle",
+                color = Ember.Text.copy(alpha = 0.5f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1
+            )
         }
     }
 }
