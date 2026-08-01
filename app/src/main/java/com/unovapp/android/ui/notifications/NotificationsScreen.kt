@@ -29,6 +29,9 @@ import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.width
 import com.unovapp.android.ui.components.BraiseLoader
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -46,7 +49,18 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.unovapp.android.data.notification.NotificationItemDto
 import com.unovapp.android.ui.components.enterFadeSlide
+import com.unovapp.android.ui.components.EmberActionPill
+import com.unovapp.android.ui.components.EmberBigNumber
+import com.unovapp.android.ui.components.EmberBody
+import com.unovapp.android.ui.components.EmberCard
+import com.unovapp.android.ui.components.EmberEyebrow
+import com.unovapp.android.ui.components.EmberScreenScaffold
+import com.unovapp.android.ui.components.EmberWave
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberDim
 import com.unovapp.android.ui.theme.EmberMotion
+import com.unovapp.android.ui.theme.countUp
+import com.unovapp.android.ui.theme.emberEnter
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.animatedAccent
 import com.unovapp.android.ui.theme.pressable
@@ -60,49 +74,49 @@ fun NotificationsScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(UnovColors.BgBase)
-            .windowInsetsPadding(WindowInsets.statusBars)
-    ) {
-        // En-tête : titre + compteur non-lus + tout marquer lu.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Notifications", color = UnovColors.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                if (state.unreadCount > 0) {
-                    Box(
-                        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(UnovColors.Accent).padding(horizontal = 8.dp, vertical = 2.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("${state.unreadCount}", color = Color(0xFF0D0D0D), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
+    // « Pulsations » — écran 05 de la maquette : titre XXL + pilule « Apaiser »,
+    // carte « POULS DU JOUR », puis les Moments en cartes.
+    EmberScreenScaffold(
+        title = "Pulsations",
+        action = {
             if (state.items.any { !it.isRead }) {
-                Row(
-                    modifier = Modifier.clip(RoundedCornerShape(999.dp)).clickable { vm.markAllRead() }.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(Icons.Outlined.DoneAll, null, tint = UnovColors.Accent, modifier = Modifier.size(16.dp))
-                    Text("Tout lire", color = UnovColors.Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                }
+                EmberActionPill(
+                    text = "Apaiser",
+                    onClick = { vm.markAllRead() },
+                    modifier = Modifier.emberEnter(dyFrom = 8.dp),
+                    leading = {
+                        Icon(
+                            Icons.Filled.LocalFireDepartment, null,
+                            tint = Ember.BraiseClair, modifier = Modifier.size(16.dp)
+                        )
+                    }
+                )
             }
         }
-
+    ) {
         when {
             state.isLoading && state.items.isEmpty() ->
-                Box(Modifier.fillMaxSize(), Alignment.Center) { BraiseLoader(color = UnovColors.Accent) }
+                Box(Modifier.fillMaxSize(), Alignment.Center) { BraiseLoader(color = Ember.Braise) }
             state.items.isEmpty() ->
                 EmptyNotifications(state.error)
             else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = contentPadding
+                modifier = Modifier.weight(1f),
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // ── Carte « POULS DU JOUR » : le bilan du jour, en tête.
+                item {
+                    PoulsDuJourCard(
+                        braises = state.unreadCount,
+                        modifier = Modifier.padding(horizontal = 20.dp).emberEnter()
+                    )
+                }
+                item {
+                    EmberEyebrow(
+                        "Moments", muted = true,
+                        modifier = Modifier.padding(start = 22.dp, top = 14.dp, bottom = 2.dp).emberEnter(dyFrom = 8.dp)
+                    )
+                }
                 // Cascade d'entrée par index réel (§2.4, plafond 8) — `indexOf` était
                 // en O(n) par ligne et se trompait sur les doublons.
                 itemsIndexed(state.items, key = { _, n -> n.id }) { index, n ->
@@ -113,7 +127,9 @@ fun NotificationsScreen(
                             vm.markRead(n.id)
                             n.data["video_id"]?.takeIf { it.isNotBlank() }?.let(vm::openVideo)
                         },
-                        modifier = Modifier.riseIn(delayMs = staggerDelay(index), key = n.id)
+                        modifier = Modifier
+                            .padding(horizontal = 20.dp)
+                            .riseIn(delayMs = staggerDelay(index), key = n.id)
                     )
                 }
                 item {
@@ -121,7 +137,7 @@ fun NotificationsScreen(
                     if (state.hasMore) {
                         LaunchedLoadMore(onReach = vm::loadMore)
                         Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) {
-                            BraiseLoader(color = UnovColors.Accent, modifier = Modifier.size(22.dp))
+                            BraiseLoader(color = Ember.Braise, modifier = Modifier.size(22.dp))
                         }
                     }
                     Spacer(Modifier.height(24.dp))
@@ -138,6 +154,40 @@ fun NotificationsScreen(
             onBack = { vm.closeVideo() }
         )
     }
+}
+
+/**
+ * « POULS DU JOUR » — la carte de bilan en tête de Pulsations (maquette écran 05) :
+ * eyebrow + date, grand compteur, onde qui se dessine, et la ligne de détail.
+ * Le compteur monte en `countUp` : aucun chiffre n'apparaît par substitution.
+ */
+@Composable
+private fun PoulsDuJourCard(braises: Int, modifier: Modifier = Modifier) {
+    EmberCard(modifier = modifier, accent = true) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            EmberEyebrow("Pouls du jour")
+            EmberBody(todayLabel(), color = Ember.TextMute, size = 14)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                EmberBigNumber("${countUp(braises)}")
+                EmberBody("braises reçues", color = Ember.TextDim, size = 15)
+            }
+            Spacer(Modifier.width(18.dp))
+            EmberWave(modifier = Modifier.weight(1f).height(56.dp))
+        }
+    }
+}
+
+/** Date du jour, façon « vendredi 18 juillet ». */
+private fun todayLabel(): String {
+    val fmt = java.text.SimpleDateFormat("EEEE d MMMM", java.util.Locale.FRENCH)
+    return fmt.format(java.util.Date())
 }
 
 @Composable
@@ -176,23 +226,27 @@ private fun NotificationRow(
     // à défaut il est souvent déjà dans le titre → on n'ajoute rien).
     val reactionEmoji = n.data["reaction"]?.let { reactionEmojiFor(it) }
     // Le fond « non lu » se retire en fondu quand la notification est lue.
-    val bg = animatedAccent(
+    // Non lu : la carte s'accentue en braise, et se calme en fondu à la lecture.
+    val border = animatedAccent(
         active = !n.isRead,
-        activeColor = UnovColors.Accent.copy(alpha = 0.06f),
-        idleColor = Color.Transparent,
+        activeColor = Ember.Braise.copy(alpha = 0.4f),
+        idleColor = Ember.Line,
         durationMs = EmberMotion.DurSheet
     )
+    val shape = RoundedCornerShape(EmberDim.CardRadius)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(bg)
+            .clip(shape)
+            .background(Ember.Surface.copy(alpha = 0.55f))
+            .border(1.dp, border, shape)
             .pressable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
-            modifier = Modifier.size(42.dp).clip(CircleShape).background(tint.copy(alpha = 0.15f)),
+            modifier = Modifier.size(44.dp).clip(CircleShape).background(tint.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center
         ) {
             if (reactionEmoji != null) {
@@ -203,17 +257,17 @@ private fun NotificationRow(
         }
 
         Column(Modifier.weight(1f)) {
-            Text(
+            EmberBody(
                 n.title,
-                color = UnovColors.Text,
-                fontSize = 14.sp,
-                fontWeight = if (n.isRead) FontWeight.Medium else FontWeight.SemiBold,
+                color = Ember.Text,
+                size = 15,
+                weight = if (n.isRead) FontWeight.Medium else FontWeight.Bold,
                 maxLines = 2
             )
             if (!n.body.isNullOrBlank()) {
-                Text(n.body, color = UnovColors.TextMute, fontSize = 12.sp, maxLines = 1)
+                EmberBody(n.body, color = Ember.TextDim, size = 13, maxLines = 1)
             }
-            Text(relativeTime(n.createdAt), color = UnovColors.TextMute, fontSize = 11.sp)
+            EmberBody(relativeTime(n.createdAt), color = Ember.TextMute, size = 12)
         }
 
         when {

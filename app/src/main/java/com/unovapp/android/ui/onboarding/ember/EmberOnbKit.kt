@@ -44,9 +44,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -54,8 +52,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.unovapp.android.R
 import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberFont
 import kotlinx.coroutines.launch
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -65,16 +63,8 @@ import kotlinx.coroutines.launch
  *  (certains Android — Xiaomi/HyperOS — rendent SansSerif en arrondi/manuscrit).
  * ══════════════════════════════════════════════════════════════════════════ */
 
-@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
-private fun hk(w: Int) = Font(
-    R.font.hanken_grotesk,
-    weight = FontWeight(w),
-    variationSettings = FontVariation.Settings(FontVariation.weight(w))
-)
-
-val OnbFont = FontFamily(
-    hk(400), hk(500), hk(600), hk(700), hk(800), hk(900)
-)
+/** Alias historique — la fonte vit désormais dans le thème ([EmberFont]). */
+val OnbFont = EmberFont
 
 @Composable
 fun OnbTitle(text: String, modifier: Modifier = Modifier, align: TextAlign = TextAlign.Start) {
