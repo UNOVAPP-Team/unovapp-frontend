@@ -66,6 +66,13 @@ import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.components.CoinShower
 import com.unovapp.android.ui.components.BalanceFlip
 import com.unovapp.android.ui.theme.UnovAppTheme
+import com.unovapp.android.ui.components.EmberBigNumber
+import com.unovapp.android.ui.components.EmberBody
+import com.unovapp.android.ui.components.EmberCard
+import com.unovapp.android.ui.components.EmberEyebrow
+import com.unovapp.android.ui.components.EmberScreenTitle
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.emberEnter
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.riseIn
 import com.unovapp.android.ui.theme.staggerDelay
@@ -181,34 +188,24 @@ private fun PacksStep(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        // Header
+        // « La Réserve » — écran 11 : titre XXL, carte héro du solde, puis les packs.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+                .padding(start = 12.dp, end = 20.dp, top = 12.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             CircleIconButton(icon = Icons.Filled.Close, onClick = onClose, description = "Fermer")
-            Text(
-                text = "Recharger",
-                color = UnovColors.Text,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.size(38.dp))
+            EmberScreenTitle("La Réserve", modifier = Modifier.weight(1f).padding(start = 8.dp).emberEnter(dyFrom = 8.dp))
         }
 
-        // Solde courant pill
-        BalanceCard(balance = balance, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+        // Carte héro : le solde en grand, son équivalent FCFA, et les deux actions.
+        BalanceCard(balance = balance, modifier = Modifier.padding(horizontal = 20.dp).emberEnter())
 
-        Text(
-            text = "CHOISIS UN PACK",
-            color = UnovColors.TextMute,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 1.6.sp,
-            modifier = Modifier.padding(start = 16.dp, top = 18.dp, bottom = 10.dp)
+        EmberEyebrow(
+            "Recharger par", muted = true,
+            modifier = Modifier.padding(start = 22.dp, top = 22.dp, bottom = 12.dp).emberEnter(dyFrom = 8.dp)
         )
 
         // Packs 2x2
@@ -283,47 +280,58 @@ private fun PacksStep(
     }
 }
 
+/**
+ * Carte héro de la Réserve (écran 11) : « TA RÉSERVE DE BRAISES », le solde en
+ * très grand, son équivalent FCFA, et les deux actions.
+ *
+ * Règle de confiance (§Écran 11) : aucun chiffre d'argent n'apparaît par
+ * substitution — le solde monte toujours en countUp, visiblement.
+ */
 @Composable
 private fun BalanceCard(balance: Long, modifier: Modifier = Modifier) {
-    // Count-up sur le solde réel (jetons). Le FCFA est estimé (~5 FCFA / jeton).
+    // Count-up sur le solde réel (braises). Le FCFA est estimé (~10 FCFA / braise,
+    // cf. « 1 braise = 1 jeton = 10 FCFA » du document produit).
     val animatedCoins = rememberCountUp(targetValue = balance.toInt(), durationMs = 1400)
-    val animatedFcfa = rememberCountUp(targetValue = (balance * 5).toInt(), durationMs = 1400)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(UnovGradients.Gold)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Column {
-            Text(
-                text = "SOLDE",
-                color = Color(0xFF0D0D0D).copy(alpha = 0.7f),
-                fontSize = 9.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 1.4.sp
+    val animatedFcfa = rememberCountUp(targetValue = (balance * 10).toInt(), durationMs = 1400)
+    EmberCard(modifier = modifier, accent = true) {
+        EmberEyebrow("Ta réserve de braises")
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            EmberBigNumber(
+                "%,d".format(animatedCoins).replace(',', ' '),
+                color = Ember.BraisePale
             )
-            Text(
-                text = "%,d".format(animatedCoins).replace(',', ' '),
-                color = Color(0xFF0D0D0D),
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.6).sp
-            )
-            Text(
-                text = "jetons · ≈ ${"%,d".format(animatedFcfa).replace(',', ' ')} FCFA",
-                color = Color(0xFF0D0D0D).copy(alpha = 0.85f),
-                fontSize = 12.sp
+            Spacer(Modifier.width(12.dp))
+            EmberBody(
+                "≈ ${"%,d".format(animatedFcfa).replace(',', ' ')} FCFA",
+                color = Ember.TextDim, size = 16,
+                modifier = Modifier.padding(bottom = 10.dp)
             )
         }
-        Icon(
-            imageVector = Icons.Outlined.MonetizationOn,
-            contentDescription = null,
-            tint = Color(0xFF0D0D0D),
-            modifier = Modifier.size(36.dp)
-        )
+        Spacer(Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // « Recharger » est l'action principale : pilule pleine dégradé de feu.
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Ember.FireGradient)
+                    .padding(vertical = 15.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                EmberBody("Recharger", color = Ember.Text, size = 16, weight = FontWeight.Bold)
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(1.dp, Ember.Line, RoundedCornerShape(14.dp))
+                    .padding(vertical = 15.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                EmberBody("Envoyer", color = Ember.TextDim, size = 16, weight = FontWeight.SemiBold)
+            }
+        }
     }
 }
 
