@@ -795,21 +795,15 @@ fun OrbeNavRow(
                         .offset(x = -dxMid, y = sagMid - sagOuter).emanate(1)
                 ) { onNavigate(com.unovapp.android.ui.components.MainTab.Search) }
 
-                // Le « + » au sommet de l'arc — création, en lagune.
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(y = -sagOuter)
-                        .emanate(0)
-                        .size(EmberDim.Orbe)
-                        .clip(CircleShape)
-                        .background(Ember.Bg.copy(alpha = 0.7f))
-                        .border(1.5.dp, Ember.Lagune, CircleShape)
-                        .pressable(onClick = onCreate),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("+", color = Ember.Lagune, fontSize = 28.sp, fontWeight = FontWeight.Light)
-                }
+                // Le « + » au SOMMET de l'arc — création, en lagune. Même gabarit que
+                // ses voisines : seule sa position (et sa couleur) le distingue.
+                NavDest(
+                    label = "",
+                    ringColor = Ember.Lagune,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                        .offset(y = -sagOuter).emanate(0),
+                    onClick = onCreate
+                )
 
                 NavDest(
                     "Pulsations", badge = true,
@@ -827,14 +821,29 @@ fun OrbeNavRow(
     }
 }
 
+/**
+ * Une destination de l'arc de navigation.
+ *
+ * Les CINQ pastilles ont exactement la même structure et la même taille — mesuré
+ * sur la maquette : les anneaux font tous 87 px (≈ 44 dp), le « + » compris. Il
+ * n'est pas plus gros, il est seulement en lagune et posé au sommet de l'arc.
+ * Structure commune = les centres des cercles s'alignent d'eux-mêmes ; c'est ce
+ * qui manquait, et le « + » retombait sous ses voisins.
+ *
+ * [label] vide ⇒ pas de texte, mais la place reste réservée pour que l'alignement
+ * par le bas reste comparable d'une pastille à l'autre.
+ */
 @Composable
 private fun NavDest(
     label: String,
     active: Boolean = false,
     badge: Boolean = false,
+    ringColor: Color? = null,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val accent = ringColor ?: if (active) Ember.Braise else Ember.Line
+    val tint = ringColor ?: if (active) Ember.Braise else Ember.Text
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -845,16 +854,15 @@ private fun NavDest(
                 .size(EmberDim.Touch)
                 .clip(CircleShape)
                 .background(Ember.Bg.copy(alpha = 0.55f))
-                .border(1.dp, if (active) Ember.Braise else Ember.Line, CircleShape),
+                .border(if (ringColor != null) 1.5.dp else 1.dp, accent, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            val tint = if (active) Ember.Braise else Ember.Text
             when (label) {
                 "Flux" -> WaveIcon(modifier = Modifier.size(22.dp), color = tint)
                 "Explorer" -> Icon(Icons.Outlined.Search, label, tint = tint, modifier = Modifier.size(20.dp))
                 "Pulsations" -> Icon(Icons.Outlined.NotificationsNone, label, tint = tint, modifier = Modifier.size(20.dp))
                 "Univers" -> Icon(Icons.Outlined.PersonOutline, label, tint = tint, modifier = Modifier.size(21.dp))
-                else -> Text(label.first().toString(), color = tint, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                else -> Text("+", color = tint, fontSize = 26.sp, fontWeight = FontWeight.Light)
             }
             // Pastille de non-lu — braise, débordant légèrement du cercle.
             if (badge) {
@@ -866,6 +874,8 @@ private fun NavDest(
                 )
             }
         }
+        // Libellé — vide pour le « + », mais la ligne est conservée : sans elle, sa
+        // pastille descendrait par rapport aux autres (alignement par le bas).
         Text(
             label,
             color = if (active) Ember.Braise else Ember.TextDim,
