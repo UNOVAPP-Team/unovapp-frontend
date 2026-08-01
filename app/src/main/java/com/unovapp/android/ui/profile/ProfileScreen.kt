@@ -71,6 +71,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -94,7 +95,12 @@ import androidx.compose.ui.geometry.Offset
 import com.unovapp.android.ui.challenge.ChallengeSection
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.BraiseLoader
+import com.unovapp.android.ui.components.EmberEyebrow
 import com.unovapp.android.ui.components.EmberRingStat
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberFont
+import com.unovapp.android.ui.theme.EmberMotion
+import com.unovapp.android.ui.theme.pressable
 import com.unovapp.android.ui.components.EmptyState
 import com.unovapp.android.ui.components.ParticleBurst
 import com.unovapp.android.ui.components.ErrorRetry
@@ -162,6 +168,9 @@ data class Highlight(val label: String, val count: String, val gradientIndex: In
 data class TopFan(val avatarIdx: Int, val username: String, val gifts: String, val rank: Int)
 data class BattleEntry(val opponent: String, val avatarIdx: Int, val won: Boolean, val votes: String, val date: String)
 data class VideoTile(val gradientIndex: Int, val views: String, val durationSec: Int)
+
+/** Palette de signature — les quatre identités proposées à l'onboarding (écran 04). */
+val SIGNATURE_COLORS = listOf(Ember.Braise, Ember.Gold, Ember.Positif, Color(0xFFC86BD9))
 
 /* ---------- Demo data ---------- */
 
@@ -932,71 +941,135 @@ private fun IdentityBlock(
 ) {
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        // ── Avatar à gauche + identité à droite (disposition maquette) ──────────
+    // Couleur de signature — l'identité visuelle choisie à l'onboarding. Locale pour
+    // l'instant : l'API n'expose pas encore de champ pour la stocker côté serveur.
+    var signatureIdx by rememberSaveable { mutableIntStateOf(0) }
+    val signature = SIGNATURE_COLORS[signatureIdx]
+
+    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+        // ── LE MONOGRAMME — l'identité de la maquette (écran 06). Ce n'est pas un
+        //    avatar dans un cercle : c'est une grande lettre typographique suivie du
+        //    point de signature. Si le créateur a mis une photo, on la garde (ce
+        //    serait une régression de la masquer) et le point vient s'y accrocher.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset(y = (-38).dp)
+                .offset(y = (-30).dp)
                 .enterFadeSlide(appeared, delayMillis = 40),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            ProfileAvatar(
-                name = state.displayName,
-                avatarUrl = state.avatarUrl,
-                uploading = avatarUploading,
-                onClick = onAvatarClick
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+            if (state.avatarUrl.isNullOrBlank()) {
+                Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        text = "@${state.username}",
-                        color = UnovColors.Text,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.4).sp,
-                        maxLines = 1
+                        text = (state.displayName.ifBlank { state.username }).take(1).uppercase(),
+                        color = Ember.Text,
+                        fontFamily = EmberFont,
+                        fontSize = 76.sp,
+                        lineHeight = 78.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = (-3).sp
                     )
-                    if (state.isVerified) {
-                        Icon(
-                            imageVector = Icons.Filled.Verified,
-                            contentDescription = "Compte vérifié",
-                            tint = UnovColors.Accent,
-                            modifier = Modifier.size(17.dp)
-                        )
-                    }
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 4.dp, bottom = 14.dp)
+                            .size(18.dp).clip(CircleShape).background(signature)
+                    )
                 }
-                Text(
-                    text = state.displayName,
-                    color = UnovColors.TextMute,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
+            } else {
+                Box {
+                    ProfileAvatar(
+                        name = state.displayName,
+                        avatarUrl = state.avatarUrl,
+                        uploading = avatarUploading,
+                        onClick = onAvatarClick
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(18.dp).clip(CircleShape).background(signature)
+                    )
+                }
             }
         }
 
-        // ── Stats : Abonnements · Abonnés · J'aime ─────────────────────────────
-        Column(modifier = Modifier.offset(y = (-24).dp).enterFadeSlide(appeared, delayMillis = 130)) {
+        Column(modifier = Modifier.offset(y = (-18).dp).enterFadeSlide(appeared, delayMillis = 90)) {
+            // @handle (+ badge vérifié). La maquette montre aussi la ville à côté, mais
+            // l'API n'expose pas de localisation : on ne l'invente pas.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "@${state.username}",
+                    color = Ember.Text,
+                    fontFamily = EmberFont,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.6).sp,
+                    maxLines = 1
+                )
+                if (state.isVerified) {
+                    Icon(
+                        imageVector = Icons.Filled.Verified,
+                        contentDescription = "Compte vérifié",
+                        tint = signature,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // La bio, en italique entre guillemets — comme « Je suis le goat ».
+            if (state.bio.isNotBlank()) {
+                Text(
+                    text = "« ${state.bio} »",
+                    color = Ember.TextDim,
+                    fontFamily = EmberFont,
+                    fontSize = 17.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    lineHeight = 24.sp,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+
+            // ── SIGNATURE — la palette d'identité. Changer de couleur la fait se
+            //    propager : point du monogramme, badge vérifié et anneaux transitent
+            //    ensemble en 520 ms. Sans cette propagation, choisir n'a aucun poids.
+            Row(
+                modifier = Modifier.padding(top = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                EmberEyebrow("Signature", muted = true)
+                SIGNATURE_COLORS.forEachIndexed { i, c ->
+                    val selected = i == signatureIdx
+                    val pop by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (selected) 1.15f else 1f,
+                        animationSpec = androidx.compose.animation.core.tween(
+                            EmberMotion.DurBase, easing = EmberMotion.EaseOut
+                        ),
+                        label = "swatchPop"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .graphicsLayer { scaleX = pop; scaleY = pop }
+                            .clip(CircleShape)
+                            .background(c)
+                            .then(if (selected) Modifier.border(2.dp, Ember.Text, CircleShape) else Modifier)
+                            .pressable(onClick = { signatureIdx = i })
+                    )
+                }
+            }
+        }
+
+        // ── Les trois anneaux ───────────────────────────────────────────────────
+        Column(modifier = Modifier.offset(y = (-6).dp).enterFadeSlide(appeared, delayMillis = 130)) {
             StatsTrio(
                 state = state,
+                accent = signature,
                 onOpenFollowers = onOpenFollowers,
                 onOpenFollowing = onOpenFollowing
             )
-
-            if (state.bio.isNotBlank()) {
-                Text(
-                    text = state.bio,
-                    color = UnovColors.TextDim,
-                    fontSize = 13.sp,
-                    lineHeight = 20.sp,
-                    modifier = Modifier.padding(top = 14.dp)
-                )
-            }
 
             // Site web cliquable (ouvre le navigateur) — affiché seulement si renseigné.
             if (state.website.isNotBlank()) {
@@ -1216,6 +1289,7 @@ private fun ProfileAvatar(
 @Composable
 private fun StatsTrio(
     state: ProfileUiState,
+    accent: Color = Ember.Braise,
     onOpenFollowers: () -> Unit = {},
     onOpenFollowing: () -> Unit = {}
 ) {
@@ -1235,6 +1309,7 @@ private fun StatsTrio(
             value = state.followersCount,
             label = "Fidèles",
             fill = 0.55f,
+            accent = accent,
             delayMs = 0,
             onClick = onOpenFollowers
         )
@@ -1243,12 +1318,14 @@ private fun StatsTrio(
             label = "Braises",
             primary = true,
             fill = 0.82f,
+            accent = accent,
             delayMs = 60
         )
         EmberRingStat(
             value = state.videosCount,
             label = "Vidéos",
             fill = 0.4f,
+            accent = accent,
             delayMs = 120
         )
     }

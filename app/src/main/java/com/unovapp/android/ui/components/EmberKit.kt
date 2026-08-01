@@ -333,10 +333,22 @@ fun EmberRingStat(
     /** Remplissage 0..1 de l'anneau — proportion visuelle, pas une valeur absolue. */
     fill: Float = 0.72f,
     delayMs: Int = 0,
+    /**
+     * Couleur de signature de l'utilisateur. Quand elle change, elle transite en
+     * 520 ms EaseSoft : le changement d'identité doit se VOIR se propager (§Écran 06).
+     */
+    accent: Color? = null,
     onClick: (() -> Unit)? = null
 ) {
     val p by animatedProgress(fill.coerceIn(0f, 1f), durationMs = EmberMotion.DurSlow, delayMs = delayMs)
-    val ringColor = if (primary) Ember.Braise else Ember.BraiseClair
+    val base = accent ?: Ember.Braise
+    val ringColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (primary) base else base.copy(alpha = 0.75f),
+        animationSpec = androidx.compose.animation.core.tween(
+            EmberMotion.DurSlow, easing = EmberMotion.EaseSoft
+        ),
+        label = "ringSignature"
+    )
     val ringSize = if (primary) 108.dp else 96.dp
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -360,7 +372,7 @@ fun EmberRingStat(
             }
             Text(
                 "${com.unovapp.android.ui.theme.countUp(value)}",
-                color = if (primary) Ember.Braise else Ember.Text,
+                color = if (primary) ringColor else Ember.Text,
                 fontSize = if (primary) 34.sp else 28.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = EmberFont
