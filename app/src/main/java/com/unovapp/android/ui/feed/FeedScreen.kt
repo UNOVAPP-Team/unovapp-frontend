@@ -309,6 +309,11 @@ fun FeedScreen(
         // État ÉVEILLÉ convoqué par l'Orbe (maquette écran 02) : l'arc vertical de
         // réactions à droite + la rangée de navigation. Rien de tout ça n'existe au repos.
         val orbeVideo = videos.getOrNull(pagerState.currentPage)
+        // Timer d'inactivité (§10.5) : l'état éveillé se retire tout seul après
+        // 3,2 s sans interaction. L'interface du Flux n'existe que le temps d'un geste.
+        LaunchedEffect(orbeOpen) {
+            if (orbeOpen) { delay(3_200); orbeOpen = false }
+        }
         OrbeNavRow(
             visible = orbeOpen,
             onDismiss = { orbeOpen = false },

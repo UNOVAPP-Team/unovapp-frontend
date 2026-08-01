@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CardGiftcard
@@ -414,6 +415,23 @@ private fun Modifier.emanate(k: Int): Modifier = appear(
     delayMs = staggerDelay(k, 28)
 )
 
+/**
+ * `reactFanIn` (§7.6) — l'ÉVENTAIL de la colonne de réactions. Les items sortent
+ * par la droite en montant : plus l'item est haut, plus il vient de loin (+18 →
+ * +33 px), et tous montent de 12 px (R4 : la chaleur monte).
+ *
+ * [k] = rang depuis le BAS (0 = Braise, qui part la première — même instant que
+ * Studio dans l'arc de navigation). Stagger 28 ms, scale de départ .86.
+ */
+@Composable
+private fun Modifier.reactFanIn(k: Int): Modifier = appear(
+    dxFrom = (18 + k * 3).dp,
+    dyFrom = 12.dp,
+    scaleFrom = 0.86f,
+    durationMs = EmberMotion.DurBase,
+    delayMs = staggerDelay(k, 28)
+)
+
 /* ---------- Une action de l'arc éveillé (étiquette à gauche, pastille à droite) ---------- */
 
 @Composable
@@ -447,15 +465,41 @@ private fun ArcAction(
             maxLines = 1, softWrap = false
         )
         if (primary) {
-            // Braise : disque plein dégradé de feu + halo, seul élément qui boucle (§3.1).
-            Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+            // La Braise (§7.5) : Ø 56, anneau de progression r=25 trait 2.5 rempli à
+            // 66 %, noyau incandescent Ø 46 (inset 5). Seul item de la colonne à
+            // respirer une fois entré.
+            Box(
+                modifier = Modifier.size(56.dp).breathe(amplitude = 1.035f, minAlpha = 0.75f),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(modifier = Modifier.size(56.dp)) {
+                    val stroke = 2.5.dp.toPx()
+                    val r = 25.dp.toPx()
+                    val topLeft = Offset(size.width / 2f - r, size.height / 2f - r)
+                    drawArc(
+                        color = Ember.Braise.copy(alpha = 0.25f),
+                        startAngle = 0f, sweepAngle = 360f, useCenter = false,
+                        style = Stroke(stroke), topLeft = topLeft,
+                        size = androidx.compose.ui.geometry.Size(r * 2, r * 2)
+                    )
+                    // 104/157.08 = 66 % — départ à midi, sens horaire.
+                    drawArc(
+                        color = Ember.Braise,
+                        startAngle = -90f, sweepAngle = 360f * 0.66f, useCenter = false,
+                        style = Stroke(stroke, cap = StrokeCap.Round), topLeft = topLeft,
+                        size = androidx.compose.ui.geometry.Size(r * 2, r * 2)
+                    )
+                }
                 Box(
-                    modifier = Modifier.size(72.dp)
-                        .breathe(amplitude = 1.05f, minAlpha = 0.8f)
-                        .background(Ember.radialGlow(0.5f), CircleShape)
-                )
-                Box(
-                    modifier = Modifier.size(60.dp).clip(CircleShape).background(Ember.FireGradient),
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(Color(0xFFFF8A2A), Color(0xFFE63900)),
+                                center = Offset(0.5f, 0.38f)
+                            )
+                        ),
                     contentAlignment = Alignment.Center
                 ) { icon() }
             }
@@ -697,9 +741,9 @@ fun OrbeNavRow(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Assez opaque pour que l'arc reste lisible même sur une vidéo en plein
-                // jour — sur du contenu clair, 0.55 laissait tout se confondre.
-                .background(Ember.Bg.copy(alpha = 0.78f))
+                // Voile d'éveil : rgba(6,4,2,.42) — valeur normative de la spec Flux
+                // (§3.5), qui tranche l'écart entre la maquette et ANIMATIONS.md (.35).
+                .background(Color(0x06040200).copy(alpha = 0.42f))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
         )
     }
@@ -733,28 +777,28 @@ fun OrbeNavRow(
                 // « transform-origin = la position de l'Orbe »). Plus il est haut dans
                 // l'arc, plus il vient de loin — d'où le facteur k. Stagger 28 ms, la
                 // Braise partant EN PREMIÈRE (k = 0).
-                ArcAction("Envoyer", onEnvoyer, Modifier.emanate(5), arcInset = 0.dp) {
+                ArcAction("Envoyer", onEnvoyer, Modifier.reactFanIn(5), arcInset = 0.dp) {
                     Icon(Icons.AutoMirrored.Filled.Send, "Envoyer", tint = Ember.Text, modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Offrir", onOffrir, Modifier.emanate(4), arcInset = 14.dp) {
+                ArcAction("Offrir", onOffrir, Modifier.reactFanIn(4), arcInset = 14.dp) {
                     Icon(Icons.Outlined.CardGiftcard, "Offrir", tint = Ember.Text, modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Garder", onGarder, Modifier.emanate(3), arcInset = 21.dp) {
+                ArcAction("Garder", onGarder, Modifier.reactFanIn(3), arcInset = 22.dp) {
                     Icon(Icons.Outlined.BookmarkBorder, "Garder", tint = Ember.Text, modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Étinceler", onEtinceler, Modifier.emanate(2), arcInset = 23.dp) {
+                ArcAction("Étinceler", onEtinceler, Modifier.reactFanIn(2), arcInset = 22.dp) {
                     SparkIcon(modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Lueur · gratuit", onLueur, Modifier.emanate(1), arcInset = 22.dp) {
+                ArcAction("Lueur · gratuit", onLueur, Modifier.reactFanIn(1), arcInset = 22.dp) {
                     LueurIcon(modifier = Modifier.size(22.dp))
                 }
                 // La Braise arrive EN PREMIER et reste le seul élément qui boucle.
                 ArcAction(
                     "Braise · jeton", onBraise,
-                    Modifier.emanate(0),
+                    Modifier.reactFanIn(0),
                     primary = true,
                     labelColor = Ember.Braise,
-                    arcInset = 11.dp
+                    arcInset = 14.dp
                 ) {
                     Icon(Icons.Filled.LocalFireDepartment, "Braise", tint = Ember.BraisePale2, modifier = Modifier.size(26.dp))
                 }
@@ -776,17 +820,16 @@ fun OrbeNavRow(
                     .fillMaxWidth()
                     .padding(bottom = bottomInset + 84.dp)
             ) {
-                val w = maxWidth
-                val radius = w * 0.937f                     // R mesuré, en proportion
-                val dxOuter = w * 0.334f                    // Flux / Univers
-                val dxMid = w * 0.185f                      // Explorer / Pulsations
-                // Creux du cercle : dy = R − √(R² − dx²). C'est lui qui courbe la rangée.
-                fun sag(dx: androidx.compose.ui.unit.Dp): androidx.compose.ui.unit.Dp {
-                    val r = radius.value; val d = dx.value
-                    return (r - kotlin.math.sqrt((r * r - d * d).coerceAtLeast(0f))).dp
-                }
-                val sagOuter = sag(dxOuter)
-                val sagMid = sag(dxMid)
+                // Géométrie NORMATIVE (spec Flux §6.3/§6.4) : écartement horizontal
+                // constant de 68 dp entre centres, envergure 272, flèche 24. Les cinq
+                // centres tombent sur un cercle R = 397,3 centré 288 dp sous l'Orbe.
+                // Valeurs fixes et non proportionnelles : la spec raisonne sur un cadre
+                // de 390 dp, et un arc qui s'étirerait avec l'écran cesserait d'être
+                // atteignable au pouce — c'est sa raison d'être.
+                val dxOuter = 136.dp                        // Flux / Univers
+                val dxMid = 68.dp                           // Explorer / Pulsations
+                val sagOuter = 24.dp                        // flèche de l'arc
+                val sagMid = 6.dp                           // 676 → 682
 
                 // Les items sont ancrés en bas-centre ; `sagOuter` sert de ligne de base
                 // pour que le sommet (le « + ») soit le point le plus haut.
@@ -803,10 +846,12 @@ fun OrbeNavRow(
                         .offset(x = -dxMid, y = sagMid - sagOuter).emanate(1)
                 ) { onNavigate(com.unovapp.android.ui.components.MainTab.Search) }
 
-                // Le « + » au SOMMET de l'arc — création, en lagune. Même gabarit que
-                // ses voisines : seule sa position (et sa couleur) le distingue.
+                // Studio au SOMMET de l'arc. En lagune parce que c'est la destination
+                // SUGGÉRÉE par l'IA (§6.5) — d'où le libellé « Studio · suggéré » et le
+                // halo lagune. Même gabarit que ses voisines : seules sa position et sa
+                // couleur le distinguent.
                 NavDest(
-                    label = "",
+                    label = "Studio · suggéré",
                     ringColor = Ember.Lagune,
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .offset(y = -sagOuter).emanate(0),
@@ -859,18 +904,28 @@ private fun NavDest(
     ) {
         Box(
             modifier = Modifier
-                .size(EmberDim.Touch)
+                .size(44.dp)
+                // La destination suggérée par l'IA porte un halo lagune (§6.5).
+                .then(
+                    if (ringColor != null) Modifier.background(
+                        Brush.radialGradient(
+                            listOf(Ember.Lagune.copy(alpha = 0.25f), Color.Transparent)
+                        ),
+                        CircleShape
+                    ) else Modifier
+                )
                 .clip(CircleShape)
-                .background(Ember.Bg.copy(alpha = 0.55f))
-                .border(if (ringColor != null) 1.5.dp else 1.dp, accent, CircleShape),
+                .background(Color(0xFF110A05).copy(alpha = 0.85f))
+                .border(if (ringColor != null) 1.dp else if (active) 1.5.dp else 1.dp, accent, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            when (label) {
-                "Flux" -> WaveIcon(modifier = Modifier.size(22.dp), color = tint)
-                "Explorer" -> Icon(Icons.Outlined.Search, label, tint = tint, modifier = Modifier.size(20.dp))
-                "Pulsations" -> Icon(Icons.Outlined.NotificationsNone, label, tint = tint, modifier = Modifier.size(20.dp))
-                "Univers" -> Icon(Icons.Outlined.PersonOutline, label, tint = tint, modifier = Modifier.size(21.dp))
-                else -> Text("+", color = tint, fontSize = 26.sp, fontWeight = FontWeight.Light)
+            // Tailles de rendu de la spec §6.5 : 17 dp pour Flux, 16 pour les autres.
+            when {
+                label == "Flux" -> WaveIcon(modifier = Modifier.size(17.dp), color = tint)
+                label == "Explorer" -> Icon(Icons.Outlined.Search, label, tint = tint, modifier = Modifier.size(16.dp))
+                label == "Pulsations" -> Icon(Icons.Outlined.NotificationsNone, label, tint = tint, modifier = Modifier.size(16.dp))
+                label == "Univers" -> Icon(Icons.Outlined.PersonOutline, label, tint = tint, modifier = Modifier.size(16.dp))
+                else -> Icon(Icons.Filled.Add, "Studio", tint = tint, modifier = Modifier.size(16.dp))
             }
             // Pastille de non-lu — braise, débordant légèrement du cercle.
             if (badge) {
