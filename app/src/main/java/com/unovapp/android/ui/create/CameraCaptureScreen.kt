@@ -37,6 +37,8 @@ import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.components.RecordingPulse
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberFont
 import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.breathe
@@ -367,17 +369,28 @@ private fun CameraRecorderUi(
                 Icon(Icons.Outlined.Close, "Fermer", tint = Color.White, modifier = Modifier.size(22.dp))
             }
             if (isRecording) {
+                // Le direct : pastille braise qui bat, pas un rouge d'alerte (§Écran 10).
                 Row(
                     modifier = Modifier
+                        .breathe(amplitude = 1.06f, minAlpha = 0.8f, periodMs = 1800)
                         .clip(RoundedCornerShape(999.dp))
-                        .background(UnovColors.Danger.copy(alpha = 0.9f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .background(Ember.Braise.copy(alpha = 0.9f))
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White))
-                    Text(formatElapsed(elapsedMs), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(Ember.Text))
+                    Text(
+                        formatElapsed(elapsedMs), color = Ember.Text,
+                        fontFamily = EmberFont, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                    )
                 }
+            } else {
+                // Titre « Studio » de la maquette (écran 07).
+                Text(
+                    "Studio", color = Ember.Text,
+                    fontFamily = EmberFont, fontSize = 20.sp, fontWeight = FontWeight.Black
+                )
             }
             Spacer(Modifier.size(40.dp))
         }
