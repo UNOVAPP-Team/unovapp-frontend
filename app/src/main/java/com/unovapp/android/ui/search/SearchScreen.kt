@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
@@ -57,7 +58,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.unovTap
+import com.unovapp.android.ui.components.EmberBody
+import com.unovapp.android.ui.components.EmberEyebrow
+import com.unovapp.android.ui.components.EmberScreenScaffold
+import com.unovapp.android.ui.components.EmberWave
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberDim
+import com.unovapp.android.ui.theme.EmberFont
 import com.unovapp.android.ui.theme.EmberMotion
+import com.unovapp.android.ui.theme.emberEnter
+import com.unovapp.android.ui.theme.pressable
 import com.unovapp.android.ui.theme.UnovAppTheme
 import com.unovapp.android.ui.theme.animatedAccent
 import com.unovapp.android.ui.theme.riseIn
@@ -106,26 +116,34 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     UnovAppTheme {
-        var activeCategory by remember { mutableStateOf(CATEGORIES.first()) }
         val s by viewModel.state.collectAsStateWithLifecycle()
         val searching = s.query.isNotBlank()
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF121212))
-                .padding(contentPadding)
-        ) {
-            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 8.dp)) {
-                SearchBar(query = s.query, onQueryChange = viewModel::onQueryChange)
+        // « Explorer » — écran 04 : champ lagune (c'est de la recherche assistée),
+        // les Ondes du Bénin, puis les Horizons.
+        EmberScreenScaffold(title = "Explorer") {
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                EmberSearchField(
+                    query = s.query,
+                    onQueryChange = viewModel::onQueryChange,
+                    modifier = Modifier.emberEnter()
+                )
                 if (!searching) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    CategoryPills(
-                        active = activeCategory,
-                        onSelect = { activeCategory = it }
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LagunePrompt("Danse ce soir à Cotonou", Modifier.weight(1f).emberEnter(dyFrom = 8.dp)) {
+                            viewModel.onQueryChange("danse")
+                        }
+                        LagunePrompt("Sons du moment", Modifier.weight(1f).emberEnter(dyFrom = 8.dp)) {
+                            viewModel.onQueryChange("son")
+                        }
+                    }
                 }
             }
+
+            Spacer(Modifier.height(20.dp))
 
             if (searching) {
                 UserSearchResults(
@@ -136,16 +154,160 @@ fun SearchScreen(
                 )
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp)
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 100.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item { SectionHeader(icon = Icons.AutoMirrored.Outlined.TrendingUp, label = "Tendances Bénin") }
-                    item { TrendingGrid(tags = MOCK_TRENDING) }
-                    item { Spacer(modifier = Modifier.height(22.dp)) }
-                    item { SectionHeader(icon = null, label = "Vidéos populaires") }
-                    item { VideoGrid(videos = MOCK_VIDEOS) }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            EmberEyebrow("Ondes du Bénin", muted = true)
+                            EmberBody("chaleur / heure", color = Ember.TextMute, size = 13)
+                        }
+                    }
+                    // Les Ondes : la plus chaude est accentuée en braise, les autres
+                    // se refroidissent visuellement (courbe grise) — comme la maquette.
+                    itemsIndexed(MOCK_TRENDING) { index, tag ->
+                        OndeRow(
+                            tag = tag,
+                            rank = index,
+                            modifier = Modifier.riseIn(delayMs = staggerDelay(index, 50), key = tag.tag)
+                        ) { viewModel.onQueryChange(tag.tag) }
+                    }
+                    item {
+                        Spacer(Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            EmberEyebrow("Horizons — triés pour toi", muted = true)
+                            // Le point lagune signale que le tri vient de l'IA (R5).
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(Ember.Lagune))
+                        }
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            HorizonCard("Cuisine du soir", "12 vidéos · 9 min", 0, Modifier.weight(1f).riseIn(delayMs = 0))
+                            HorizonCard("Zangbeto, la nuit", "8 vidéos · 6 min", 2, Modifier.weight(1f).riseIn(delayMs = 50))
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+/** Champ de recherche lagune — la couleur dit que la recherche est assistée (R5). */
+@Composable
+private fun EmberSearchField(query: String, onQueryChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(18.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Ember.Surface.copy(alpha = 0.5f))
+            .border(1.dp, Ember.Lagune.copy(alpha = 0.45f), shape)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(Modifier.size(9.dp).clip(CircleShape).background(Ember.Lagune))
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            cursorBrush = SolidColor(Ember.Lagune),
+            textStyle = TextStyle(color = Ember.Text, fontSize = 16.sp, fontFamily = EmberFont),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner ->
+                if (query.isEmpty()) {
+                    EmberBody(
+                        "Demande ce que tu veux voir…",
+                        color = Ember.TextMute, size = 16, maxLines = 1
+                    )
+                }
+                inner()
+            }
+        )
+        Icon(Icons.Outlined.Search, "Chercher", tint = Ember.TextDim, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Suggestion lagune — proposée par l'IA, donc en lagune et sans translation. */
+@Composable
+private fun LagunePrompt(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, Ember.Lagune.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .pressable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        EmberBody(text, color = Ember.Lagune, size = 14, maxLines = 2)
+    }
+}
+
+/**
+ * Une Onde : courbe + nom + tendance + volume. La plus chaude porte l'accent
+ * braise ; les suivantes se refroidissent (courbe grise), comme sur la maquette.
+ */
+@Composable
+private fun OndeRow(tag: TrendingTag, rank: Int, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val hot = rank < 2
+    val shape = RoundedCornerShape(EmberDim.CardRadius)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Ember.Surface.copy(alpha = 0.5f))
+            .border(1.dp, if (rank == 0) Ember.Braise.copy(alpha = 0.5f) else Ember.Line, shape)
+            .pressable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        EmberWave(
+            modifier = Modifier.size(width = 58.dp, height = 30.dp),
+            color = if (hot) Ember.Braise else Ember.TextMute,
+            points = if (hot) listOf(0.2f, 0.8f, 0.35f, 0.9f, 0.4f) else listOf(0.5f, 0.6f, 0.45f, 0.55f, 0.4f)
+        )
+        Column(Modifier.weight(1f)) {
+            EmberBody(tag.tag, color = Ember.Text, size = 17, weight = FontWeight.Bold, maxLines = 1)
+            EmberBody(ondeStatus(rank), color = Ember.TextMute, size = 13, maxLines = 1)
+        }
+        Text(
+            tag.viewsFmt,
+            color = if (hot) Ember.Braise else Ember.TextDim,
+            fontSize = 20.sp, fontWeight = FontWeight.Black, fontFamily = EmberFont
+        )
+    }
+}
+
+private fun ondeStatus(rank: Int) = when (rank) {
+    0 -> "monte depuis 2 h · Cotonou"
+    1 -> "stable · tout le Bénin"
+    2 -> "redescend doucement"
+    else -> "chaud à l'heure du repas"
+}
+
+/** Carte d'Horizon — une pile thématique proposée par l'IA. */
+@Composable
+private fun HorizonCard(title: String, meta: String, gradientIndex: Int, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(UnovGradients.videoBg(gradientIndex))
+            .border(1.dp, Ember.Braise.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+            .aspectRatio(0.78f)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Bottom
+    ) {
+        EmberBody(title, color = Ember.Text, size = 18, weight = FontWeight.Bold, maxLines = 2)
+        Spacer(Modifier.height(4.dp))
+        EmberBody(meta, color = Ember.TextDim, size = 13, maxLines = 1)
     }
 }
 
