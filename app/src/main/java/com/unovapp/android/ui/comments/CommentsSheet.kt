@@ -58,12 +58,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.ShimmerBox
+import androidx.compose.foundation.border
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberFont
 import com.unovapp.android.ui.theme.riseIn
 import com.unovapp.android.ui.theme.staggerDelay
 import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.components.GoldShimmerBox
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.theme.UnovMotion
+
+/** L'étincelle du composeur — gerbe à centre creux, comme dans le feed. */
+@Composable
+private fun EtincelleGlyph(modifier: Modifier = Modifier, color: Color = Ember.BraiseClair) {
+    androidx.compose.foundation.Canvas(modifier = modifier) {
+        val c = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+        val rOut = size.minDimension / 2f
+        val rIn = rOut * 0.26f
+        for (i in 0 until 8) {
+            val a = Math.toRadians((i * 45).toDouble())
+            val dx = kotlin.math.cos(a).toFloat(); val dy = kotlin.math.sin(a).toFloat()
+            drawLine(
+                color,
+                androidx.compose.ui.geometry.Offset(c.x + dx * rIn, c.y + dy * rIn),
+                androidx.compose.ui.geometry.Offset(c.x + dx * rOut, c.y + dy * rOut),
+                1.7.dp.toPx(),
+                androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        }
+    }
+}
 
 data class CommentUi(
     val id: String,
@@ -142,12 +166,25 @@ fun CommentsSheet(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "$commentCountFmt commentaires",
-                color = UnovColors.Text,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
+            // « Étincelles » + le compte en braise (maquette écran 03).
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Étincelles",
+                    color = Ember.Text,
+                    fontFamily = EmberFont,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-0.5).sp
+                )
+                Text(
+                    text = commentCountFmt,
+                    color = Ember.Braise,
+                    fontFamily = EmberFont,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+            }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
@@ -231,37 +268,42 @@ fun CommentsSheet(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Avatar(idx = 5, name = "moi", size = 32.dp)
+            // Composeur de la maquette : étincelle à gauche, invite « Laisse une
+            // étincelle… », bouton d'envoi en pastille de feu.
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(999.dp))
-                    .background(UnovColors.SurfaceAlt)
-                    .padding(start = 14.dp, end = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .border(1.dp, Ember.Braise.copy(alpha = 0.35f), RoundedCornerShape(999.dp))
+                    .padding(start = 16.dp, end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                EtincelleGlyph(Modifier.size(18.dp))
                 BasicTextField(
                     value = text,
                     onValueChange = { text = it },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                    cursorBrush = SolidColor(UnovColors.Accent),
+                    cursorBrush = SolidColor(Ember.Braise),
                     textStyle = androidx.compose.ui.text.TextStyle(
-                        color = Color.White,
-                        fontSize = 14.sp
+                        color = Ember.Text,
+                        fontFamily = EmberFont,
+                        fontSize = 15.sp
                     ),
                     decorationBox = { inner ->
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 12.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             if (text.isEmpty()) {
                                 Text(
-                                    text = "Ajouter un commentaire…",
-                                    color = UnovColors.TextMute,
-                                    fontSize = 14.sp
+                                    text = "Laisse une étincelle…",
+                                    color = Ember.TextMute,
+                                    fontFamily = EmberFont,
+                                    fontSize = 15.sp
                                 )
                             }
                             inner()
