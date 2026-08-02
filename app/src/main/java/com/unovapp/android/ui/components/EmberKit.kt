@@ -383,6 +383,39 @@ fun EmberRingStat(
     }
 }
 
+/**
+ * Bandeau « démo » — à poser sur tout écran dont le contenu vient de
+ * `data/mock/MockContent.kt`.
+ *
+ * L'app s'interdit partout ailleurs d'inventer des données. Là où l'on montre
+ * quand même la maquette faute de backend, on le DIT à l'écran : un utilisateur
+ * ne doit jamais confondre une vitrine avec ses vraies conversations ou ses
+ * vrais revenus. Ce bandeau disparaît en même temps que le fichier de mock.
+ */
+@Composable
+fun DemoBanner(text: String, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Ember.Gold.copy(alpha = 0.08f))
+            .border(1.dp, Ember.Gold.copy(alpha = 0.35f), shape)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(Ember.Gold))
+        Text(
+            text = text,
+            color = Ember.Gold,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            fontFamily = EmberFont
+        )
+    }
+}
+
 /** Séparateur fin des cartes. */
 @Composable
 fun EmberDivider(modifier: Modifier = Modifier) {

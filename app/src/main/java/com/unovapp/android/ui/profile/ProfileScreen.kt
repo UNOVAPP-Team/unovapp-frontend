@@ -95,6 +95,7 @@ import androidx.compose.ui.geometry.Offset
 import com.unovapp.android.ui.challenge.ChallengeSection
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.BraiseLoader
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.unovapp.android.ui.components.EmberEyebrow
 import com.unovapp.android.ui.components.EmberRingStat
 import com.unovapp.android.ui.theme.Ember
@@ -168,6 +169,26 @@ data class Highlight(val label: String, val count: String, val gradientIndex: In
 data class TopFan(val avatarIdx: Int, val username: String, val gifts: String, val rank: Int)
 data class BattleEntry(val opponent: String, val avatarIdx: Int, val won: Boolean, val votes: String, val date: String)
 data class VideoTile(val gradientIndex: Int, val views: String, val durationSec: Int)
+
+/** Retour d'un overlay plein écran (Cercles, La Forge). */
+@Composable
+private fun OverlayBackButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(start = 12.dp, top = 10.dp)
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(Ember.Surface.copy(alpha = 0.7f))
+            .pressable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowBack, "Retour",
+            tint = Ember.Text, modifier = Modifier.size(20.dp)
+        )
+    }
+}
 
 /** Palette de signature — les quatre identités proposées à l'onboarding (écran 04). */
 val SIGNATURE_COLORS = listOf(Ember.Braise, Ember.Gold, Ember.Positif, Color(0xFFC86BD9))
@@ -257,6 +278,9 @@ fun ProfileScreen(
         var createChallengeOpen by remember { mutableStateOf(false) }
         var myChallenges by remember { mutableStateOf(listOf<com.unovapp.android.ui.challenge.ChallengeCard>()) }
         var settingsOpen by remember { mutableStateOf(false) }
+        // Écrans de la maquette encore sans backend, ouverts depuis les Réglages.
+        var cerclesOpen by remember { mutableStateOf(false) }
+        var forgeOpen by remember { mutableStateOf(false) }
         var photoSheetOpen by remember { mutableStateOf(false) }
         var photoViewerOpen by remember { mutableStateOf(false) }
         val context = LocalContext.current
@@ -468,8 +492,27 @@ fun ProfileScreen(
                 onClose = { settingsOpen = false },
                 onEditProfile = { settingsOpen = false; editOpen = true },
                 onOpenWallet = { settingsOpen = false; onOpenWallet() },
+                onOpenCercles = { settingsOpen = false; cerclesOpen = true },
+                onOpenForge = { settingsOpen = false; forgeOpen = true },
                 onLogout = { viewModel.logout(onLoggedOut) }
             )
+        }
+
+        // Cercles et La Forge — écrans de la maquette encore sans backend. Ils
+        // s'ouvrent en overlay plein écran depuis les Réglages.
+        if (cerclesOpen) {
+            androidx.activity.compose.BackHandler { cerclesOpen = false }
+            Box(Modifier.fillMaxSize().background(Ember.Bg)) {
+                com.unovapp.android.ui.cercles.CerclesScreen()
+                OverlayBackButton(onClick = { cerclesOpen = false })
+            }
+        }
+        if (forgeOpen) {
+            androidx.activity.compose.BackHandler { forgeOpen = false }
+            Box(Modifier.fillMaxSize().background(Ember.Bg)) {
+                com.unovapp.android.ui.forge.ForgeScreen()
+                OverlayBackButton(onClick = { forgeOpen = false })
+            }
         }
 
         // Lecture plein écran d'une vidéo de la grille (mes vidéos / favoris).

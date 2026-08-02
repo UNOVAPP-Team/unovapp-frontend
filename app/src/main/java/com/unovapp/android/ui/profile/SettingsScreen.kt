@@ -99,6 +99,8 @@ fun SettingsScreen(
     onClose: () -> Unit,
     onEditProfile: () -> Unit,
     onOpenWallet: () -> Unit,
+    onOpenCercles: () -> Unit = {},
+    onOpenForge: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -149,6 +151,16 @@ fun SettingsScreen(
 
         // ----- Créateur -----
         SettingsGroup("Créateur") {
+            SettingRow(
+                Icons.Outlined.Forum, "Cercles",
+                subtitle = "Messagerie — aperçu de démonstration",
+                onClick = onOpenCercles
+            )
+            SettingRow(
+                Icons.Outlined.WorkspacePremium, "La Forge",
+                subtitle = "Marques & créateurs — aperçu de démonstration",
+                onClick = onOpenForge
+            )
             SettingRow(Icons.Outlined.BarChart, "Studio créateur", subtitle = "Statistiques & revenus", soon = true)
             SettingRow(Icons.Outlined.LiveTv, "Lives & Battles", soon = true)
         }
