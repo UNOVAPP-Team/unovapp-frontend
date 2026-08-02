@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CardGiftcard
@@ -77,6 +78,7 @@ import com.unovapp.android.ui.theme.Ember
 import com.unovapp.android.ui.theme.EmberDim
 import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.GlowPulse
+import com.unovapp.android.ui.theme.animatedAccent
 import com.unovapp.android.ui.theme.appear
 import com.unovapp.android.ui.theme.arcOpen
 import com.unovapp.android.ui.theme.breathe
@@ -534,6 +536,8 @@ private fun ArcAction(
      * la maquette ne montre pas.
      */
     arcInset: androidx.compose.ui.unit.Dp = 0.dp,
+    /** Action à bascule déjà accomplie : la pastille s'allume et le dit. */
+    active: Boolean = false,
     icon: @Composable () -> Unit
 ) {
     Row(
@@ -588,10 +592,22 @@ private fun ArcAction(
                 ) { icon() }
             }
         } else {
+            // Bordure et fond s'allument quand l'action est déjà faite — et la
+            // transition est interpolée, pour qu'on VOIE la bascule se produire.
+            val ring = animatedAccent(
+                active = active,
+                activeColor = Ember.Braise.copy(alpha = 0.75f),
+                idleColor = Ember.Text.copy(alpha = 0.16f)
+            )
+            val fill = animatedAccent(
+                active = active,
+                activeColor = Ember.Braise.copy(alpha = 0.16f),
+                idleColor = Color(0xFF0D0804).copy(alpha = 0.7f)
+            )
             Box(
-                modifier = Modifier.size(56.dp).clip(CircleShape)
-                    .background(Ember.Bg.copy(alpha = 0.55f))
-                    .border(1.dp, Ember.Line, CircleShape),
+                modifier = Modifier.size(44.dp).clip(CircleShape)
+                    .background(fill)
+                    .border(1.dp, ring, CircleShape),
                 contentAlignment = Alignment.Center
             ) { icon() }
         }
@@ -811,6 +827,12 @@ fun OrbeNavRow(
      * Ailleurs, l'Orbe ne convoque que la navigation.
      */
     showReactions: Boolean = true,
+    /**
+     * État courant des deux actions à bascule. Sans lui, l'utilisateur tape et
+     * ne voit rien : la pastille doit dire si c'est DÉJÀ fait.
+     */
+    isLiked: Boolean = false,
+    isSaved: Boolean = false,
     /** Destination active, pour l'accent braise dans la rangée. */
     activeTab: com.unovapp.android.ui.components.MainTab = com.unovapp.android.ui.components.MainTab.Feed,
     modifier: Modifier = Modifier
@@ -867,8 +889,19 @@ fun OrbeNavRow(
                 ArcAction("Offrir", onOffrir, Modifier.reactFanIn(4), arcInset = 14.dp) {
                     Icon(Icons.Outlined.CardGiftcard, "Offrir", tint = Ember.Text, modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Garder", onGarder, Modifier.reactFanIn(3), arcInset = 22.dp) {
-                    Icon(Icons.Outlined.BookmarkBorder, "Garder", tint = Ember.Text, modifier = Modifier.size(22.dp))
+                // Garder : marque-page PLEIN et braise quand la vidéo est déjà gardée.
+                ArcAction(
+                    if (isSaved) "Gardée" else "Garder",
+                    onGarder, Modifier.reactFanIn(3), arcInset = 22.dp,
+                    active = isSaved,
+                    labelColor = if (isSaved) Ember.BraiseClair else Ember.TextDim
+                ) {
+                    Icon(
+                        if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                        "Garder",
+                        tint = if (isSaved) Ember.Braise else Ember.Text,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
                 ArcAction("Étinceler", onEtinceler, Modifier.reactFanIn(2), arcInset = 22.dp) {
                     SparkIcon(modifier = Modifier.size(22.dp))
@@ -877,10 +910,12 @@ fun OrbeNavRow(
                 // que le geste soit confirmé AVANT même que l'arc ne se referme.
                 var lueurLocal by remember { mutableIntStateOf(0) }
                 ArcAction(
-                    "Lueur · gratuit",
+                    if (isLiked) "Lueur déposée" else "Lueur · gratuit",
                     onClick = { lueurLocal++; onLueur() },
                     modifier = Modifier.reactFanIn(1),
-                    arcInset = 22.dp
+                    arcInset = 22.dp,
+                    active = isLiked,
+                    labelColor = if (isLiked) Ember.BraisePale2 else Ember.TextDim
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         GlowPulse(

@@ -23,8 +23,8 @@ android {
         applicationId = "com.unovapp.android"
         minSdk = 24
         targetSdk = 36
-        versionCode = 14
-        versionName = "2.3"
+        versionCode = 15
+        versionName = "2.4"
 
         // Passerelle unique, en HTTPS depuis le 2026-07-28. Un reverse proxy Nginx route
         // en interne vers auth/user/social/video/notification selon le chemin ; les 5

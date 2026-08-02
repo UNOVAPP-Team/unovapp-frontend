@@ -122,6 +122,8 @@ fun FeedScreen(
     var orbeOpen by remember { mutableStateOf(false) }
     // Compteur de Lueurs — chaque incrément déclenche le halo sur la vidéo.
     var lueurPulse by remember { mutableIntStateOf(0) }
+    // Chaque interaction dans l'arc relance le timer d'inactivité.
+    var orbeTick by remember { mutableIntStateOf(0) }
     val view = androidx.compose.ui.platform.LocalView.current
     var commentsForVideoId by remember { mutableStateOf<String?>(null) }
     var giftSheetOpen by remember { mutableStateOf(false) }
@@ -318,9 +320,10 @@ fun FeedScreen(
         val orbeVideo = videos.getOrNull(pagerState.currentPage)
         // Timer d'inactivité (§10.5) : l'état éveillé se retire tout seul après
         // 3,2 s sans interaction. L'interface du Flux n'existe que le temps d'un geste.
-        LaunchedEffect(orbeOpen) {
+        // `orbeTick` relance le compte à rebours à chaque interaction (§10.5) : le
+        // timer n'est PAS censé courir pendant qu'on agit.
+        LaunchedEffect(orbeOpen, orbeTick) {
             if (orbeOpen) {
-                // Charge l'étincelle à mettre en avant, puis referme après 3,2 s.
                 orbeVideo?.id?.let { feedVm.loadSpark(it) }
                 delay(3_200); orbeOpen = false
             }
@@ -331,18 +334,30 @@ fun FeedScreen(
             onNavigate = { orbeOpen = false; onNavigate(it) },
             onCreate = { orbeOpen = false; onOpenCreate() },
             bottomInset = navBarBottom,
+            // L'arc reflète l'état réel de la vidéo courante : la pastille dit si
+            // c'est déjà fait, au lieu de laisser l'utilisateur deviner.
+            isLiked = orbeVideo?.isLiked == true,
+            isSaved = orbeVideo?.isSaved == true,
             // Braise = réaction payante (feuille de cadeaux) ; Lueur = réaction gratuite.
             onBraise = { orbeOpen = false; giftSheetOpen = true },
-            // Lueur : réaction gratuite. Halo crème + haptique LÉGÈRE (la Braise,
-            // elle, aura un haptique medium) — puis l'arc se referme.
+            // ── Les deux BASCULES ne referment PAS l'arc ────────────────────────
+            // La spec ne liste que trois déclencheurs de fermeture : tap sur l'Orbe,
+            // tap ailleurs, ou 3,2 s d'inactivité (§6.7). En fermant sur l'action,
+            // on empêchait l'utilisateur de voir sa propre bascule — le geste
+            // semblait sans effet. On relance simplement le compte à rebours.
             onLueur = {
                 orbeVideo?.let { feedVm.toggleLike(it.id) }
                 lueurPulse++
                 Haptics.light(view)
-                orbeOpen = false
+                orbeTick++
             },
+            onGarder = {
+                orbeVideo?.let { feedVm.toggleSave(it.id) }
+                Haptics.light(view)
+                orbeTick++
+            },
+            // ── Celles-ci ouvrent autre chose : là, fermer l'arc est justifié ───
             onEtinceler = { orbeOpen = false; commentsForVideoId = orbeVideo?.id },
-            onGarder = { orbeVideo?.let { feedVm.toggleSave(it.id) }; orbeOpen = false },
             onOffrir = { orbeOpen = false; giftSheetOpen = true },
             onEnvoyer = { orbeOpen = false; orbeVideo?.let { shareVideo(context, it) } }
         )
