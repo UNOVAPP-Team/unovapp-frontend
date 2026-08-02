@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Fond de l'icône adaptive (anthracite du logo UNOVAPP). -->
-    <color name="ic_launcher_background">#1C2321</color>
+    <!--
+        Fond de l'icône adaptive. #1C2321 tirait vers le vert (28,35,33) : sur fond
+        clair, l'icône se lisait « vert et blanc » alors que la marque est blanc +
+        orange. Remplacé par le noir tiède de l'app (#0B0704), qui fait ressortir
+        le crème et la braise sans introduire de troisième teinte.
+    -->
+    <color name="ic_launcher_background">#0B0704</color>
 </resources>

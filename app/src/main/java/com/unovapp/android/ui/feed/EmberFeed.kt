@@ -76,6 +76,7 @@ import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.theme.Ember
 import com.unovapp.android.ui.theme.EmberDim
 import com.unovapp.android.ui.theme.EmberMotion
+import com.unovapp.android.ui.theme.GlowPulse
 import com.unovapp.android.ui.theme.appear
 import com.unovapp.android.ui.theme.arcOpen
 import com.unovapp.android.ui.theme.breathe
@@ -124,7 +125,13 @@ fun EmberFeedItem(
      */
     awakened: Boolean = false,
     /** L'étincelle mise en avant sur cette vidéo, si elle en a une. */
-    spark: SparkPreview? = null
+    spark: SparkPreview? = null,
+    /**
+     * Compteur de Lueurs déposées. Chaque incrément déclenche un `glowTouch`
+     * (§3.8) : un halo crème bref, VOLONTAIREMENT plus discret que l'`emberBurst`
+     * de la Braise — la Lueur est un souffle, pas un feu.
+     */
+    lueurPulse: Int = 0
 ) {
     // Double-tap = souffler (réaction) avec pop de flamme sous le doigt.
     var flamePop by remember(video.id) { mutableIntStateOf(0) }
@@ -182,6 +189,16 @@ fun EmberFeedItem(
                 Icon(Icons.Filled.PlayArrow, "Lecture", tint = Ember.Text.copy(alpha = 0.92f), modifier = Modifier.size(42.dp))
             }
         }
+
+        // La LUEUR — halo crème qui s'épanouit et s'efface (§3.8, 520 ms).
+        // Contraste voulu avec la Braise : bref et blanc, là où elle est longue et
+        // orange. L'utilisateur doit sentir la différence avant de la comprendre.
+        GlowPulse(
+            trigger = lueurPulse,
+            modifier = Modifier.align(Alignment.Center).size(220.dp),
+            color = Ember.BraisePale2,
+            diameter = 220.dp
+        )
 
         // Flamme au double-tap.
         AnimatedVisibility(
@@ -856,8 +873,24 @@ fun OrbeNavRow(
                 ArcAction("Étinceler", onEtinceler, Modifier.reactFanIn(2), arcInset = 22.dp) {
                     SparkIcon(modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Lueur · gratuit", onLueur, Modifier.reactFanIn(1), arcInset = 22.dp) {
-                    LueurIcon(modifier = Modifier.size(22.dp))
+                // La Lueur : son propre halo part de sa pastille au moment du tap, pour
+                // que le geste soit confirmé AVANT même que l'arc ne se referme.
+                var lueurLocal by remember { mutableIntStateOf(0) }
+                ArcAction(
+                    "Lueur · gratuit",
+                    onClick = { lueurLocal++; onLueur() },
+                    modifier = Modifier.reactFanIn(1),
+                    arcInset = 22.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        GlowPulse(
+                            trigger = lueurLocal,
+                            modifier = Modifier.size(64.dp),
+                            color = Ember.BraisePale2,
+                            diameter = 64.dp
+                        )
+                        LueurIcon(modifier = Modifier.size(22.dp), color = Ember.BraisePale2)
+                    }
                 }
                 // La Braise arrive EN PREMIER et reste le seul élément qui boucle.
                 ArcAction(

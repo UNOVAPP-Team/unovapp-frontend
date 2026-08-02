@@ -80,6 +80,8 @@ import androidx.compose.ui.unit.IntOffset
 import com.unovapp.android.ui.theme.UnovGradients
 import kotlin.math.roundToInt
 import com.unovapp.android.ui.comments.CommentsSheet
+import androidx.compose.runtime.mutableIntStateOf
+import com.unovapp.android.ui.theme.Haptics
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.wallet.WalletViewModel
 
@@ -118,6 +120,9 @@ fun FeedScreen(
     // Nouvelle maquette : mode de tri (Suivis/Braise) + ouverture de la navigation de l'Orbe.
     var feedMode by rememberSaveable { mutableStateOf(EmberFeedMode.Braise) }
     var orbeOpen by remember { mutableStateOf(false) }
+    // Compteur de Lueurs — chaque incrément déclenche le halo sur la vidéo.
+    var lueurPulse by remember { mutableIntStateOf(0) }
+    val view = androidx.compose.ui.platform.LocalView.current
     var commentsForVideoId by remember { mutableStateOf<String?>(null) }
     var giftSheetOpen by remember { mutableStateOf(false) }
     var giftBreakdownVideo by remember { mutableStateOf<FeedVideoUi?>(null) }
@@ -287,7 +292,8 @@ fun FeedScreen(
                 onOrbe = { orbeOpen = true },
                 bottomInset = navBarBottom + 12.dp,
                 awakened = orbeOpen && page == pagerState.currentPage,
-                spark = feedState.sparks[videos[page].id]
+                spark = feedState.sparks[videos[page].id],
+                lueurPulse = if (page == pagerState.currentPage) lueurPulse else 0
             )
             }
         }
@@ -327,7 +333,14 @@ fun FeedScreen(
             bottomInset = navBarBottom,
             // Braise = réaction payante (feuille de cadeaux) ; Lueur = réaction gratuite.
             onBraise = { orbeOpen = false; giftSheetOpen = true },
-            onLueur = { orbeVideo?.let { feedVm.toggleLike(it.id) }; orbeOpen = false },
+            // Lueur : réaction gratuite. Halo crème + haptique LÉGÈRE (la Braise,
+            // elle, aura un haptique medium) — puis l'arc se referme.
+            onLueur = {
+                orbeVideo?.let { feedVm.toggleLike(it.id) }
+                lueurPulse++
+                Haptics.light(view)
+                orbeOpen = false
+            },
             onEtinceler = { orbeOpen = false; commentsForVideoId = orbeVideo?.id },
             onGarder = { orbeVideo?.let { feedVm.toggleSave(it.id) }; orbeOpen = false },
             onOffrir = { orbeOpen = false; giftSheetOpen = true },

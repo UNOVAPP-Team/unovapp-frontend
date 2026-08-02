@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Splash système (Android 12+) : le SYMBOLE de la marque (deux crochets entrelacés,
-    sarcelle + terracotta), converti depuis logo/symbol-color.svg.
-    Remplace l'ancienne icône « play » générique qui n'avait rien d'UNOVAPP.
+    Splash système (Android 12+) : le SYMBOLE de la marque — deux crochets entrelacés.
     Le contenu (26..74 du viewport 100) reste dans la zone sûre circulaire du masque splash.
+
+    ⚠️ PALETTE DE MARQUE : blanc + orange, UNIQUEMENT.
+    Le premier crochet était en sarcelle (#0E6B6B) — hérité du SVG d'origine. C'est la
+    seule couleur verte qui subsistait dans l'app et elle apparaissait au lancement,
+    donc en toute première impression. Passée en crème.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -13,7 +16,7 @@
     <group android:translateX="4" android:translateY="4">
         <path
             android:pathData="M26,52 L26,33 C26,28.6 28.6,26 33,26 L52,26"
-            android:strokeColor="#0E6B6B"
+            android:strokeColor="#F5F1EA"
             android:strokeWidth="14"
             android:strokeLineCap="round"
             android:strokeLineJoin="round"
