@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,18 +27,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.unovapp.android.data.mock.MOCK_REALISATEUR_IDEA
+import com.unovapp.android.data.mock.MOCK_REALISATEUR_PLAN
+import com.unovapp.android.data.mock.MOCK_SCENES
+import com.unovapp.android.data.mock.MockScene
+import com.unovapp.android.ui.components.DemoBanner
+import com.unovapp.android.ui.components.EmberBody
 import com.unovapp.android.ui.components.unovTap
 import com.unovapp.android.ui.components.RecordingPulse
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberDim
 import com.unovapp.android.ui.theme.EmberFont
 import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.UnovColors
@@ -64,6 +75,7 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Cameraswitch
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.foundation.border
@@ -213,7 +225,7 @@ private fun CameraPermissionPrompt(
     }
 }
 
-private const val MAX_DURATION_MS = 60_000L
+private const val DEFAULT_DURATION_SEC = 60
 
 /** Caméra live + enregistrement (CameraX). */
 @Composable
@@ -250,6 +262,11 @@ private fun CameraRecorder(
     var isRecording by remember { mutableStateOf(false) }
     var elapsedMs by remember { mutableStateOf(0L) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    // Le plan de tournage (écran 07) : la scène active et la durée choisie
+    // (15 / 60 / 90 s) bornent l'enregistrement.
+    var sceneIndex by remember { mutableStateOf(0) }
+    var durationSec by remember { mutableStateOf(DEFAULT_DURATION_SEC) }
+    val maxDurationMs = durationSec * 1000L
 
     // (Re)lie la caméra au cycle de vie à chaque changement d'objectif.
     LaunchedEffect(lensFacing) {
@@ -298,7 +315,7 @@ private fun CameraRecorder(
                 is VideoRecordEvent.Start -> { isRecording = true; elapsedMs = 0L }
                 is VideoRecordEvent.Status -> {
                     elapsedMs = event.recordingStats.recordedDurationNanos / 1_000_000L
-                    if (elapsedMs >= MAX_DURATION_MS) recording?.stop()
+                    if (elapsedMs >= maxDurationMs) recording?.stop()
                 }
                 is VideoRecordEvent.Finalize -> {
                     isRecording = false
@@ -327,6 +344,10 @@ private fun CameraRecorder(
         isRecording = isRecording,
         elapsedMs = elapsedMs,
         errorMsg = errorMsg,
+        sceneIndex = sceneIndex,
+        durationSec = durationSec,
+        onSelectScene = { sceneIndex = it },
+        onSelectDuration = { durationSec = it },
         onToggleRecording = { toggleRecording() },
         onFlip = { lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) CameraSelector.LENS_FACING_FRONT else CameraSelector.LENS_FACING_BACK },
         onPickFromGallery = onPickFromGallery,
@@ -340,6 +361,10 @@ private fun CameraRecorderUi(
     isRecording: Boolean,
     elapsedMs: Long,
     errorMsg: String?,
+    sceneIndex: Int,
+    durationSec: Int,
+    onSelectScene: (Int) -> Unit,
+    onSelectDuration: (Int) -> Unit,
     onToggleRecording: () -> Unit,
     onFlip: () -> Unit,
     onPickFromGallery: () -> Unit,
@@ -395,6 +420,70 @@ private fun CameraRecorderUi(
             Spacer(Modifier.size(40.dp))
         }
 
+        // ── TON RÉALISATEUR (écran 07) — l'intention d'abord, le plan ensuite.
+        //    Panneau LAGUNE : tout ce qui vient de l'IA porte sa couleur.
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 12.dp, top = 58.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DemoBanner(
+                "Écran de démonstration — le Réalisateur arrive avec l'IA (août)."
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Ember.Lagune.copy(alpha = 0.08f))
+                    .border(1.dp, Ember.Lagune.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        Icons.Outlined.AutoAwesome, null,
+                        tint = Ember.Lagune, modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        "Ton réalisateur", color = Ember.Lagune,
+                        fontFamily = EmberFont, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                }
+                Text(
+                    text = MOCK_REALISATEUR_IDEA,
+                    color = Ember.Text,
+                    fontFamily = EmberFont,
+                    fontSize = 16.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    lineHeight = 21.sp
+                )
+                EmberBody(
+                    MOCK_REALISATEUR_PLAN,
+                    color = Ember.Lagune,
+                    size = 13,
+                    maxLines = 2,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                // Le plan en cartes — la scène active est en braise.
+                Row(
+                    modifier = Modifier.padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MOCK_SCENES.forEachIndexed { i, scene ->
+                        SceneCard(
+                            scene = scene,
+                            selected = i == sceneIndex,
+                            onClick = { onSelectScene(i) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
         if (errorMsg != null) {
             Text(
                 errorMsg,
@@ -403,8 +492,36 @@ private fun CameraRecorderUi(
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 80.dp, start = 24.dp, end = 24.dp)
+                    .padding(top = 260.dp, start = 24.dp, end = 24.dp)
             )
+        }
+
+        // ── Sélecteurs en pilules au-dessus des contrôles : scène active + durée 15/60/90.
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 152.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MOCK_SCENES.forEachIndexed { i, scene ->
+                    StudioPill(
+                        label = scene.label,
+                        selected = i == sceneIndex,
+                        onClick = { onSelectScene(i) }
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(15, 60, 90).forEach { d ->
+                    StudioPill(
+                        label = "${d}s",
+                        selected = d == durationSec,
+                        onClick = { onSelectDuration(d) }
+                    )
+                }
+            }
         }
 
         // Barre basse : galerie · bouton enregistrement · flip caméra.
@@ -429,43 +546,57 @@ private fun CameraRecorderUi(
                 Icon(Icons.Outlined.PhotoLibrary, "Galerie", tint = Color.White, modifier = Modifier.size(22.dp))
             }
 
-            // Bouton d'enregistrement (anneau + pastille qui passe en carré quand on filme).
-            // §Écran 07 : au repos il respire à 1.02 — il invite sans clignoter ; quand on
-            // filme il SE CONTRACTE (80 → 72 dp en 160 ms), il ne grandit jamais.
-            val recSize by animateDpAsState(
-                targetValue = if (isRecording) 72.dp else 80.dp,
-                animationSpec = tween(EmberMotion.DurQuick, easing = EmberMotion.EaseOut),
-                label = "recButtonSize"
-            )
-            val innerSize by animateDpAsState(
-                targetValue = if (isRecording) 32.dp else 62.dp,
-                animationSpec = tween(EmberMotion.DurQuick, easing = EmberMotion.EaseOut),
-                label = "recInnerSize"
-            )
-            val innerRadius by animateDpAsState(
-                targetValue = if (isRecording) 8.dp else 31.dp,
-                animationSpec = tween(EmberMotion.DurQuick, easing = EmberMotion.EaseOut),
-                label = "recInnerRadius"
-            )
-            Box(
-                modifier = Modifier
-                    .breathe(amplitude = 1.02f, minAlpha = 0.92f, enabled = !isRecording)
-                    .size(recSize)
-                    .clip(CircleShape)
-                    .border(4.dp, Color.White, CircleShape)
-                    .unovTap(onClick = onToggleRecording, pressedScale = 0.92f),
-                contentAlignment = Alignment.Center
-            ) {
-                // Anneau pulsant rouge pendant l'enregistrement
-                RecordingPulse(
-                    isActive = isRecording,
-                    modifier = Modifier.size(90.dp)
-                )
+            // Bouton d'enregistrement 84 px (écran 07) avec anneau de progression et
+            // légende contextuelle (« 3 s · accroche »). L'anneau se remplit pendant
+            // l'enregistrement jusqu'à la durée choisie ; au repos il annonce la scène.
+            val scene = MOCK_SCENES.getOrElse(sceneIndex) { MOCK_SCENES.first() }
+            val progress = if (isRecording) {
+                (elapsedMs.toFloat() / (durationSec * 1000L)).coerceIn(0f, 1f)
+            } else {
+                scene.seconds / 90f
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(innerSize)
-                        .clip(RoundedCornerShape(innerRadius))
-                        .background(UnovColors.Accent)
+                        .breathe(amplitude = 1.02f, minAlpha = 0.92f, enabled = !isRecording)
+                        .size(EmberDim.RecordButton)
+                        .clip(CircleShape)
+                        .border(4.dp, Color.White, CircleShape)
+                        .unovTap(onClick = onToggleRecording, pressedScale = 0.92f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Anneau de progression braise — la seule jauge de l'app (§3.3).
+                    Canvas(modifier = Modifier.size(EmberDim.RecordButton)) {
+                        val stroke = 3.dp.toPx()
+                        drawArc(
+                            color = Ember.Braise,
+                            startAngle = -90f,
+                            sweepAngle = 360f * progress,
+                            useCenter = false,
+                            style = Stroke(stroke, cap = StrokeCap.Round),
+                            topLeft = Offset(stroke / 2f, stroke / 2f),
+                            size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+                        )
+                    }
+                    // Pulsation rouge pendant l'enregistrement.
+                    RecordingPulse(
+                        isActive = isRecording,
+                        modifier = Modifier.size(EmberDim.RecordButton)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(if (isRecording) 32.dp else 58.dp)
+                            .clip(RoundedCornerShape(if (isRecording) 8.dp else 29.dp))
+                            .background(UnovColors.Accent)
+                    )
+                }
+                Text(
+                    text = if (isRecording) formatElapsed(elapsedMs) else "${scene.seconds}s · ${scene.label.lowercase()}",
+                    color = Ember.Text,
+                    fontFamily = EmberFont,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
                 )
             }
 
@@ -481,6 +612,70 @@ private fun CameraRecorderUi(
                 Icon(Icons.Outlined.Cameraswitch, "Changer de caméra", tint = Color.White, modifier = Modifier.size(22.dp))
             }
         }
+    }
+}
+
+/** Carte du plan de tournage — la scène active est en braise. */
+@Composable
+private fun SceneCard(
+    scene: MockScene,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = modifier
+            .clip(shape)
+            .background(if (selected) Ember.Braise.copy(alpha = 0.22f) else Ember.Surface.copy(alpha = 0.6f))
+            .border(1.dp, if (selected) Ember.Braise else Ember.Line, shape)
+            .unovTap(onClick = onClick, pressedScale = 0.94f)
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = "${scene.index}",
+            color = if (selected) Ember.Braise else Ember.TextMute,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+        Text(
+            text = scene.label,
+            color = Ember.Text,
+            fontFamily = EmberFont,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "${scene.seconds}s · ${scene.shot}",
+            color = if (selected) Ember.BraiseClair else Ember.TextDim,
+            fontSize = 9.sp,
+            maxLines = 1
+        )
+    }
+}
+
+/** Pilule du sélecteur (scène ou durée) — la sélection est en braise. */
+@Composable
+private fun StudioPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(999.dp)
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .background(if (selected) Ember.Braise else Color.Black.copy(alpha = 0.45f))
+            .border(1.dp, if (selected) Ember.Braise else Color.White.copy(alpha = 0.22f), shape)
+            .unovTap(onClick = onClick, pressedScale = 0.92f)
+            .padding(horizontal = 14.dp, vertical = 7.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color.White else Ember.Text,
+            fontFamily = EmberFont,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 

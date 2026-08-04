@@ -37,14 +37,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.CardGiftcard
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
@@ -1005,6 +1008,95 @@ fun OrbeNavRow(
                         .offset(x = dxOuter, y = sagOuter - sagOuter).emanate(2)
                 ) { onNavigate(com.unovapp.android.ui.components.MainTab.Profile) }
             }
+        }
+    }
+}
+
+/* ═══════════════════ Panneau « CE MOMENT » (écran 02, état éveillé) ═══════════════════ */
+
+/**
+ * Le panneau « CE MOMENT » — haut gauche, état éveillé du Flux. Il porte les trois
+ * contextes actionnables de la vidéo : le son, le lieu, le défi (spec écran 02).
+ *
+ * Règle de donnée : chaque ligne n'apparaît QUE si le champ est réel (non nul).
+ * Un son absent ne fabrique pas de ligne vide — avec le backend, le panneau
+ * n'affiche que ce qui existe vraiment.
+ *
+ * Les actions (« Garder ce son », « 12 vidéos près de toi », « Rejoindre ») sont
+ * des chips visuels pour la maquette : leurs flux (sons gardés, recherche autour
+ * de soi, challenges) n'ont pas encore de destination. On ne clique pas sur ce
+ * qui ne fait rien.
+ */
+@Composable
+fun CeMomentPanel(
+    soundLabel: String?,
+    locationLabel: String?,
+    challengeTag: String?,
+    modifier: Modifier = Modifier
+) {
+    if (soundLabel == null && locationLabel == null && challengeTag == null) return
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        modifier = modifier
+            .fillMaxWidth(0.86f)
+            .clip(shape)
+            .background(Color(0xFF0D0804).copy(alpha = 0.72f))
+            .border(1.dp, Ember.Text.copy(alpha = 0.14f), shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            "CE MOMENT",
+            color = Ember.TextDim,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.6.sp,
+            maxLines = 1
+        )
+        CeMomentRow(
+            icon = { Icon(Icons.Outlined.MusicNote, "Son", tint = Ember.BraiseClair, modifier = Modifier.size(15.dp)) },
+            label = soundLabel,
+            action = "Garder ce son"
+        )
+        CeMomentRow(
+            icon = { Icon(Icons.Outlined.LocationOn, "Lieu", tint = Ember.BraiseClair, modifier = Modifier.size(15.dp)) },
+            label = locationLabel,
+            action = "12 vidéos près de toi"
+        )
+        CeMomentRow(
+            icon = { Icon(Icons.Outlined.Tag, "Défi", tint = Ember.BraiseClair, modifier = Modifier.size(15.dp)) },
+            label = challengeTag?.let { "#$it" },
+            action = "Rejoindre"
+        )
+    }
+}
+
+@Composable
+private fun CeMomentRow(
+    icon: @Composable () -> Unit,
+    label: String?,
+    action: String,
+    modifier: Modifier = Modifier
+) {
+    if (label.isNullOrBlank()) return
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        icon()
+        Text(
+            text = label,
+            color = Ember.Text.copy(alpha = 0.9f),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(start = 8.dp)
+        )
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .border(1.dp, Ember.Text.copy(alpha = 0.3f), RoundedCornerShape(999.dp))
+                .padding(horizontal = 10.dp, vertical = 5.dp)
+        ) {
+            Text(action, color = Ember.TextDim, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

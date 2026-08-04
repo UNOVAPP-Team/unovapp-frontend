@@ -79,12 +79,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -92,6 +95,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import com.unovapp.android.ui.challenge.ChallengeSection
 import com.unovapp.android.ui.components.Avatar
 import com.unovapp.android.ui.components.BraiseLoader
@@ -105,6 +109,12 @@ import com.unovapp.android.ui.theme.pressable
 import com.unovapp.android.ui.components.EmptyState
 import com.unovapp.android.ui.components.ParticleBurst
 import com.unovapp.android.ui.components.ErrorRetry
+import com.unovapp.android.ui.components.DemoBanner
+import com.unovapp.android.data.mock.MOCK_EMPREINTE
+import com.unovapp.android.data.mock.MOCK_EMPREINTE_INSIGHT
+import com.unovapp.android.data.mock.MOCK_SERIES
+import com.unovapp.android.data.mock.MockSerie
+import com.unovapp.android.data.mock.MockTheme
 import com.unovapp.android.ui.components.ShimmerBox
 import com.unovapp.android.ui.components.Filigree
 import com.unovapp.android.ui.components.LanguageChip
@@ -346,10 +356,22 @@ fun ProfileScreen(
                 onAvatarClick = { photoSheetOpen = true }
             )
 
+            // EMPREINTE (écran 06) — « ce que racontent tes vidéos », mosaïque asymétrique.
+            // Données demo (MockContent.kt) tant que le backend n'expose pas les thèmes auto.
+            StaggerReveal(index = 0) {
+                EmpreinteSection()
+            }
+
+            // SÉRIES (écran 06) — l'unité éditoriale du profil, pas une grille de vignettes.
+            // Données demo (MockContent.kt) tant que l'API séries n'existe pas.
+            StaggerReveal(index = 1) {
+                SeriesSection()
+            }
+
             // Sections content-aware : on n'affiche que ce qui a réellement des données
             // (backend). Le reste reste masqué tant que les endpoints n'existent pas.
             if (state.achievements.isNotEmpty()) {
-                StaggerReveal(index = 0) {
+                StaggerReveal(index = 2) {
                     Column {
                         SectionHeader(eyebrow = "Distinctions")
                         HorizontalScrollRow(start = 16.dp, end = 16.dp) {
@@ -359,19 +381,8 @@ fun ProfileScreen(
                 }
             }
 
-            if (state.highlights.isNotEmpty()) {
-                StaggerReveal(index = 1) {
-                    Column {
-                        SectionHeader(eyebrow = "Séries", action = "Tout voir")
-                        HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 14.dp) {
-                            state.highlights.forEach { HighlightCircle(it) }
-                        }
-                    }
-                }
-            }
-
             if (state.topFans.isNotEmpty()) {
-                StaggerReveal(index = 2) {
+                StaggerReveal(index = 3) {
                     Column {
                         SectionHeader(eyebrow = "Top fans")
                         HorizontalScrollRow(start = 16.dp, end = 16.dp, itemSpacing = 6.dp) {
@@ -1337,10 +1348,11 @@ private fun StatsTrio(
     onOpenFollowing: () -> Unit = {}
 ) {
     // Univers (écran 06) : trois ANNEAUX, pas trois colonnes de chiffres. Les Braises
-    // sont au centre et en pleine braise — c'est la métrique qui compte.
+    // sont au centre, en pleine braise, avec halo — c'est la métrique qui compte.
     // Vocabulaire produit : « Fidèle » = abonné, « Braise » = réaction reçue.
-    // La maquette montre « Séries » en troisième ; la fonctionnalité n'existe pas
-    // encore, donc on affiche les vidéos plutôt que d'inventer un compteur vide.
+    // Parti pris de la maquette : le compteur de Fidèles est le plus petit des trois —
+    // ce qui est mis en avant, c'est la chaleur reçue, pas l'ancienneté. Le 3ᵉ anneau
+    // est « Séries » (données demo tant que l'API séries n'existe pas).
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1354,6 +1366,7 @@ private fun StatsTrio(
             fill = 0.55f,
             accent = accent,
             delayMs = 0,
+            ringSize = 84.dp,
             onClick = onOpenFollowers
         )
         EmberRingStat(
@@ -1365,11 +1378,12 @@ private fun StatsTrio(
             delayMs = 60
         )
         EmberRingStat(
-            value = state.videosCount,
-            label = "Vidéos",
+            value = MOCK_SERIES.size,
+            label = "Séries",
             fill = 0.4f,
             accent = accent,
-            delayMs = 120
+            delayMs = 120,
+            ringSize = 96.dp
         )
     }
 }
@@ -1728,75 +1742,215 @@ private fun AchievementPill(a: Achievement) {
     }
 }
 
-/* ---------- Highlight circle ---------- */
+/* ---------- Empreinte (écran 06) ---------- */
+
+/**
+ * « Empreinte » — ce que les vidéos d'un créateur racontent de lui, en mosaïque
+ * asymétrique : une grande tuile (la thématique la plus chaude) + deux tuiles,
+ * puis la suggestion de l'IA en carte pointillée lagune.
+ */
+@Composable
+private fun EmpreinteSection() {
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        SectionHeader(eyebrow = "Empreinte")
+        DemoBanner(
+            "Écran de démonstration — l'Empreinte arrivera avec les thèmes auto (IA, août).",
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            val big = MOCK_EMPREINTE.first()
+            EmpreinteTile(
+                theme = big,
+                large = true,
+                modifier = Modifier.weight(1.15f)
+            )
+            Column(
+                modifier = Modifier.weight(0.85f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                MOCK_EMPREINTE.drop(1).forEach { t ->
+                    EmpreinteTile(
+                        theme = t,
+                        large = false,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        EmpreinteInsightCard()
+    }
+}
 
 @Composable
-private fun HighlightCircle(h: Highlight) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+private fun EmpreinteTile(theme: MockTheme, large: Boolean, modifier: Modifier = Modifier) {
+    val tint = Color(theme.tintHex)
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(if (large) 168.dp else 79.dp)
+            .clip(shape)
+            .background(
+                Brush.linearGradient(
+                    listOf(tint.copy(alpha = 0.28f), tint.copy(alpha = 0.06f))
+                )
+            )
+            .border(1.dp, tint.copy(alpha = 0.45f), shape)
+            .padding(12.dp),
+        contentAlignment = Alignment.BottomStart
+    ) {
+        Column {
+            Text(
+                text = theme.label,
+                color = Ember.Text,
+                fontFamily = EmberFont,
+                fontSize = if (large) 18.sp else 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "${theme.videos} vidéos",
+                color = tint,
+                fontFamily = EmberFont,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            if (!theme.note.isNullOrBlank()) {
+                Text(
+                    text = theme.note.uppercase(),
+                    color = tint,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * La suggestion de l'IA, en carte à bordure POINTILLÉE lagune : c'est une voix
+ * de la machine (lagune), et elle ne s'impose pas — elle se présente en pointillés.
+ */
+@Composable
+private fun EmpreinteInsightCard() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                val stroke = 1.5.dp.toPx()
+                drawRoundRect(
+                    color = Ember.Lagune.copy(alpha = 0.6f),
+                    style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f))),
+                    cornerRadius = CornerRadius(16.dp.toPx())
+                )
+            }
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.AutoAwesome,
+            contentDescription = null,
+            tint = Ember.Lagune,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = MOCK_EMPREINTE_INSIGHT,
+            color = Ember.Lagune,
+            fontFamily = EmberFont,
+            fontSize = 13.sp,
+            lineHeight = 18.sp
+        )
+    }
+}
+
+/* ---------- Série (écran 06) ---------- */
+
+/** « Séries » — l'unité éditoriale du profil. Chaque série a son numéro, son nombre
+ *  d'épisodes et son statut (publiée / brouillon). */
+@Composable
+private fun SeriesSection() {
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        SectionHeader(eyebrow = "Séries", action = "Nouvelle série")
+        DemoBanner(
+            "Écran de démonstration — l'unité Séries arrivera avec l'API backend.",
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            MOCK_SERIES.forEach { SerieCard(it) }
+        }
+    }
+}
+
+@Composable
+private fun SerieCard(serie: MockSerie) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Ember.Surface.copy(alpha = 0.55f))
+            .border(
+                1.dp,
+                if (serie.draft) Ember.Line else Ember.Braise.copy(alpha = 0.4f),
+                shape
+            )
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
+                .size(52.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(
-                    if (h.live) Brush.sweepGradient(
-                        listOf(
-                            UnovColors.Accent,
-                            Color(0xFFFF944D),
-                            UnovColors.AccentDeep,
-                            UnovColors.Accent
-                        )
-                    ) else Brush.linearGradient(
-                        listOf(
-                            UnovColors.Accent.copy(alpha = 0.4f),
-                            UnovColors.AccentDeep.copy(alpha = 0.2f)
-                        )
+                    Brush.linearGradient(
+                        listOf(Ember.Braise.copy(alpha = 0.4f), Ember.Gold.copy(alpha = 0.18f))
                     )
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // Inner black gap
-            Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF0A0A0A)),
-                contentAlignment = Alignment.Center
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = if (serie.draft) Ember.TextMute else Ember.Braise,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = serie.title,
+                color = if (serie.draft) Ember.TextDim else Ember.Text,
+                fontFamily = EmberFont,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+            Row(
+                modifier = Modifier.padding(top = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Video preview
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape)
-                        .background(UnovGradients.videoBg(h.gradientIndex))
-                )
-            }
-            // Count badge bottom-right
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color(0xFF0A0A0A))
-                    .border(1.5.dp, UnovColors.Accent, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 5.dp, vertical = 1.dp)
-            ) {
+                if (serie.badge != null) {
+                    Text(
+                        text = serie.badge,
+                        color = Ember.Braise,
+                        fontFamily = EmberFont,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
-                    text = h.count,
-                    color = UnovColors.Accent,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
+                    text = serie.note,
+                    color = Ember.TextMute,
+                    fontFamily = EmberFont,
+                    fontSize = 13.sp
                 )
             }
         }
-        Text(
-            text = h.label,
-            color = UnovColors.Text,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.width(70.dp)
-        )
     }
 }
 

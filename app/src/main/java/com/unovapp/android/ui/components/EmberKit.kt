@@ -23,10 +23,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -338,7 +344,9 @@ fun EmberRingStat(
      * 520 ms EaseSoft : le changement d'identité doit se VOIR se propager (§Écran 06).
      */
     accent: Color? = null,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    /** Taille du cercle. Null → défaut : 108 dp si [primary], sinon 96 dp. */
+    ringSize: Dp? = null
 ) {
     val p by animatedProgress(fill.coerceIn(0f, 1f), durationMs = EmberMotion.DurSlow, delayMs = delayMs)
     val base = accent ?: Ember.Braise
@@ -349,12 +357,40 @@ fun EmberRingStat(
         ),
         label = "ringSignature"
     )
-    val ringSize = if (primary) 108.dp else 96.dp
+    val ringSize = ringSize ?: if (primary) 108.dp else 96.dp
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.then(if (onClick != null) Modifier.pressable(onClick = onClick) else Modifier)
     ) {
         Box(modifier = Modifier.size(ringSize), contentAlignment = Alignment.Center) {
+            // Lueur radiale derrière l'anneau primaire : « la braise éclaire l'écran »
+            // (§3.3 — lueur orange en halo diffus). Réservée à la métrique qui compte.
+            if (primary) {
+                val halo by rememberInfiniteTransition(label = "ringHalo").animateFloat(
+                    initialValue = 0.92f,
+                    targetValue = 1.06f,
+                    // EaseBreath : la courbe symétrique des boucles de respiration (§2.2).
+                    // `EaseInOut` n'existe pas dans la grammaire — les cinq courbes
+                    // autorisées sont EaseOut / EaseIn / EaseSoft / EaseBreath / EaseSnap.
+                    animationSpec = infiniteRepeatable(
+                        tween(2600, easing = EmberMotion.EaseBreath),
+                        RepeatMode.Reverse
+                    ),
+                    label = "ringHaloValue"
+                )
+                Canvas(modifier = Modifier.size(ringSize)) {
+                    val radius = size.minDimension / 2f
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(base.copy(alpha = 0.28f), Color.Transparent),
+                            center = center,
+                            radius = radius * 1.2f
+                        ),
+                        radius = radius * 1.2f * halo,
+                        center = center
+                    )
+                }
+            }
             Canvas(modifier = Modifier.size(ringSize)) {
                 val stroke = (if (primary) 5f else 4f).dp.toPx()
                 drawCircle(

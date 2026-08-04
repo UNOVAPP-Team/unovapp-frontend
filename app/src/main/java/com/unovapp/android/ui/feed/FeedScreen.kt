@@ -3,6 +3,9 @@
 package com.unovapp.android.ui.feed
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import coil.imageLoader
 import coil.request.ImageRequest
 import com.unovapp.android.ui.components.EmptyState
@@ -13,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -32,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
@@ -48,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -81,6 +87,8 @@ import com.unovapp.android.ui.theme.UnovGradients
 import kotlin.math.roundToInt
 import com.unovapp.android.ui.comments.CommentsSheet
 import androidx.compose.runtime.mutableIntStateOf
+import com.unovapp.android.ui.theme.Ember
+import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.Haptics
 import com.unovapp.android.ui.theme.UnovColors
 import com.unovapp.android.ui.wallet.WalletViewModel
@@ -128,6 +136,8 @@ fun FeedScreen(
     var commentsForVideoId by remember { mutableStateOf<String?>(null) }
     var giftSheetOpen by remember { mutableStateOf(false) }
     var giftBreakdownVideo by remember { mutableStateOf<FeedVideoUi?>(null) }
+    // Confirmation explicite (–1 jeton) avant la Braise : jamais par accident (§La Braise).
+    var braiseConfirm by remember { mutableStateOf(false) }
 
     // État de session — partagé entre toutes les pages du feed (comportement attendu sur TikTok).
     var muted by rememberSaveable { mutableStateOf(false) }
@@ -315,6 +325,29 @@ fun FeedScreen(
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
+        // Panneau « CE MOMENT » (écran 02) — les contextes actionnables de la vidéo
+        // (son / lieu / défi), révélé à l'ÉVEIL sous le pouce. Il ne montre que les
+        // champs réels de la vidéo courante : un son absent n'affiche pas de ligne.
+        val ceVideo = videos.getOrNull(pagerState.currentPage)
+        AnimatedVisibility(
+            visible = orbeOpen,
+            enter = fadeIn(tween(EmberMotion.DurBase, easing = EmberMotion.EaseOut)) + slideInVertically(
+                initialOffsetY = { -it / 3 },
+                animationSpec = tween(EmberMotion.DurBase, easing = EmberMotion.EaseOut)
+            ),
+            exit = fadeOut(tween(EmberMotion.DurQuick, easing = EmberMotion.EaseIn)),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(start = 16.dp, top = 64.dp)
+        ) {
+            CeMomentPanel(
+                soundLabel = ceVideo?.soundLabel,
+                locationLabel = ceVideo?.locationLabel,
+                challengeTag = ceVideo?.challengeTag
+            )
+        }
+
         // État ÉVEILLÉ convoqué par l'Orbe (maquette écran 02) : l'arc vertical de
         // réactions à droite + la rangée de navigation. Rien de tout ça n'existe au repos.
         val orbeVideo = videos.getOrNull(pagerState.currentPage)
@@ -338,8 +371,9 @@ fun FeedScreen(
             // c'est déjà fait, au lieu de laisser l'utilisateur deviner.
             isLiked = orbeVideo?.isLiked == true,
             isSaved = orbeVideo?.isSaved == true,
-            // Braise = réaction payante (feuille de cadeaux) ; Lueur = réaction gratuite.
-            onBraise = { orbeOpen = false; giftSheetOpen = true },
+            // Braise = réaction payante : une confirmation explicite (–1 jeton) s'interpose
+            // (§La Braise — jamais par accident). La Lueur reste gratuite et sans garde-fou.
+            onBraise = { braiseConfirm = true },
             // ── Les deux BASCULES ne referment PAS l'arc ────────────────────────
             // La spec ne liste que trois déclencheurs de fermeture : tap sur l'Orbe,
             // tap ailleurs, ou 3,2 s d'inactivité (§6.7). En fermant sur l'action,
@@ -396,6 +430,129 @@ fun FeedScreen(
             video = video,
             onDismiss = { giftBreakdownVideo = null }
         )
+    }
+
+    // ── CONFIRMATION DE LA BRAISE (–1 jeton) ─────────────────────────────────────
+    // Le point critique de la spec : la bascule Lueur (gratuite) → Braise (payante)
+    // doit être impossible par accident. Une confirmation explicite s'interpose,
+    // affichant le solde réel de la Réserve. Solde insuffisant → on propose la recharge.
+    if (braiseConfirm) {
+        val solde = jetonBalance
+        // `orbeVideo` vit dans la portée du Box de l'arc ; ici on est au niveau du
+        // composable, d'où une relecture de la vidéo courante pour nommer le créateur.
+        val confirmVideo = videos.getOrNull(pagerState.currentPage)
+        androidx.compose.ui.window.Dialog(onDismissRequest = { braiseConfirm = false }) {
+            val shape = RoundedCornerShape(24.dp)
+            Column(
+                modifier = Modifier
+                    .clip(shape)
+                    .background(Ember.Surface)
+                    .border(1.dp, Ember.Braise.copy(alpha = 0.45f), shape)
+                    .padding(horizontal = 22.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(Ember.BraiseClair, Ember.Braise),
+                                center = androidx.compose.ui.geometry.Offset(0.5f, 0.35f)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.LocalFireDepartment, null, tint = Ember.Bg, modifier = Modifier.size(28.dp))
+                }
+                Text(
+                    "Souffler sur la braise ?",
+                    color = Ember.Text,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+                Text(
+                    "1 jeton prélevé sur ta Réserve. Le créateur qui la reçoit peut la reverser en FCFA — ton soutien devient du revenu.",
+                    color = Ember.TextDim,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Text(
+                    "Ta Réserve : $solde jeton${if (solde > 1) "s" else ""}",
+                    color = if (solde >= 1) Ember.BraiseClair else Ember.Gold,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                if (solde >= 1) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(top = 20.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .border(1.dp, Ember.Line, RoundedCornerShape(999.dp))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { braiseConfirm = false }
+                                .padding(horizontal = 22.dp, vertical = 11.dp)
+                        ) {
+                            Text("Annuler", color = Ember.TextDim, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Ember.Braise)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    if (walletViewModel.trySpend(1)) {
+                                        Haptics.medium(view)
+                                        braiseConfirm = false
+                                        orbeOpen = false
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Braise soufflée — 1 jeton pour ${confirmVideo?.creatorUsername?.let { "@$it" } ?: "le créateur"}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        braiseConfirm = false
+                                        onOpenWallet()
+                                    }
+                                }
+                                .padding(horizontal = 22.dp, vertical = 11.dp)
+                        ) {
+                            Text("Souffler — 1 jeton", color = Ember.Bg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 20.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(Ember.Gold)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                braiseConfirm = false
+                                onOpenWallet()
+                            }
+                            .padding(vertical = 13.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Recharger la Réserve", color = Ember.Bg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
     }
 }
 

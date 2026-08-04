@@ -50,7 +50,14 @@ data class FeedVideoUi(
     val viewsFmt: String = "0",
     /** Durée annoncée par l'API (s) — repli pour le chip temps du scrub si le player n'a pas
      *  encore résolu la durée exacte. */
-    val durationSec: Int = 0
+    val durationSec: Int = 0,
+    /** Contexte audio réel de la vidéo (titre — artiste). Alimente « CE MOMENT » (écran 02).
+     *  Null tant que l'API ne le fournit pas : la ligne ne s'affiche alors pas. */
+    val soundLabel: String? = null,
+    /** Lieu réel de tournage (libellé libre). Alimente « CE MOMENT » (écran 02). */
+    val locationLabel: String? = null,
+    /** Défi rejoint par la vidéo, sans le « # ». Alimente « CE MOMENT » (écran 02). */
+    val challengeTag: String? = null
 ) {
     /** URL à partager/télécharger : la rendition concrète, jamais la data-URI de lecture. */
     val shareableUrl: String get() = downloadUrl.ifBlank { hlsUrl }
@@ -102,6 +109,9 @@ val MockFeedVideos: List<FeedVideoUi> = listOf(
         isFollowing = false,
         isLiked = true,
         giftsFmt = "891",
+        soundLabel = "DJ Bossou — Nuit d'Or",
+        locationLabel = "Cotonou, Fidjrossè",
+        challengeTag = "ZangbetoChallenge",
         giftBreakdown = listOf(
             GiftReceived("🎁", "Surprise", 23),
             GiftReceived("⭐", "Étoile", 67),
@@ -119,6 +129,8 @@ val MockFeedVideos: List<FeedVideoUi> = listOf(
         sharesFmt = "156",
         isFollowing = false,
         giftsFmt = "234",
+        soundLabel = "Sons du moment",
+        locationLabel = "Lagos",
         giftBreakdown = listOf(
             GiftReceived("🌹", "Rose", 98),
             GiftReceived("❤️", "Cœur", 136),
@@ -135,6 +147,7 @@ val MockFeedVideos: List<FeedVideoUi> = listOf(
         sharesFmt = "412",
         isFollowing = true,
         giftsFmt = "45",
+        locationLabel = "Dakar",
         giftBreakdown = listOf(
             GiftReceived("🌹", "Rose", 45),
         )
