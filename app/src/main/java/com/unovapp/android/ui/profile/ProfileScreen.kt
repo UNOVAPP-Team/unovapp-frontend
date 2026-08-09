@@ -144,6 +144,8 @@ data class ProfileUiState(
     val isVerified: Boolean = false,
     val tier: String = "Tier Free",
     val city: String = "",
+    /** Couleur de signature du serveur, au format `#RRGGBB`. Vide = jamais choisie. */
+    val signatureColor: String = "",
     val bio: String = "",
     val website: String = "",
     val avatarUrl: String? = null,
@@ -202,6 +204,17 @@ private fun OverlayBackButton(onClick: () -> Unit) {
 
 /** Palette de signature — les quatre identités proposées à l'onboarding (écran 04). */
 val SIGNATURE_COLORS = listOf(Ember.Braise, Ember.Gold, Ember.Positif, Color(0xFFC86BD9))
+
+/**
+ * Les mêmes couleurs au format `#RRGGBB` — c'est ce que le backend attend, et il
+ * REJETTE en 400 tout autre format. On n'envoie donc jamais de saisie libre :
+ * seulement l'une de ces quatre valeurs.
+ */
+val SIGNATURE_HEX = listOf("#FF4D00", "#E8B84B", "#8FCE84", "#C86BD9")
+
+/** Retrouve l'index d'une couleur serveur ; retombe sur la braise si inconnue. */
+fun indexOfSignature(hex: String): Int =
+    SIGNATURE_HEX.indexOfFirst { it.equals(hex.trim(), ignoreCase = true) }.takeIf { it >= 0 } ?: 0
 
 /* ---------- Demo data ---------- */
 
@@ -353,7 +366,8 @@ fun ProfileScreen(
                 onOpenFollowers = { myId?.let { onOpenConnections(it, state.username, true) } },
                 onOpenFollowing = { myId?.let { onOpenConnections(it, state.username, false) } },
                 avatarUploading = avatarState.isUploading,
-                onAvatarClick = { photoSheetOpen = true }
+                onAvatarClick = { photoSheetOpen = true },
+                onPickSignature = { hex -> viewModel.updateSignatureColor(hex) }
             )
 
             // EMPREINTE (écran 06) — « ce que racontent tes vidéos », mosaïque asymétrique.
@@ -623,6 +637,10 @@ private fun mergeRealProfile(
         else "Tier " + p.subscriptionTier.replaceFirstChar { it.uppercase() },
         bio = p.bio?.takeIf { it.isNotBlank() } ?: base.bio,
         website = p.websiteUrl ?: "",
+        // Livrés par le backend le 05/08 — la ville et la couleur de signature
+        // viennent enfin du serveur, elles ne sont plus locales à l'appareil.
+        city = p.city?.takeIf { it.isNotBlank() } ?: "",
+        signatureColor = p.signatureColor?.takeIf { it.isNotBlank() } ?: "",
         avatarUrl = p.avatarUrl,
         coverUrl = p.coverUrl,
         followersFmt = formatCompact(p.followersCount),
@@ -991,13 +1009,20 @@ private fun IdentityBlock(
     onOpenFollowers: () -> Unit = {},
     onOpenFollowing: () -> Unit = {},
     avatarUploading: Boolean = false,
-    onAvatarClick: () -> Unit = {}
+    onAvatarClick: () -> Unit = {},
+    /** Persiste la couleur de signature choisie (format #RRGGBB). */
+    onPickSignature: (String) -> Unit = {}
 ) {
     var appeared by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { appeared = true }
     // Couleur de signature — l'identité visuelle choisie à l'onboarding. Locale pour
     // l'instant : l'API n'expose pas encore de champ pour la stocker côté serveur.
-    var signatureIdx by rememberSaveable { mutableIntStateOf(0) }
+    // La couleur de signature vient du SERVEUR (champ `signature_color`, livré le 05/08).
+    // On part de la valeur distante ; un choix local prend le dessus le temps que le
+    // PATCH aboutisse, pour que la propagation soit instantanée à l'écran.
+    var pickedIdx by rememberSaveable(state.signatureColor) { mutableStateOf<Int?>(null) }
+    val serverIdx = remember(state.signatureColor) { indexOfSignature(state.signatureColor) }
+    val signatureIdx = pickedIdx ?: serverIdx
     val signature = SIGNATURE_COLORS[signatureIdx]
 
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -1070,6 +1095,18 @@ private fun IdentityBlock(
                         modifier = Modifier.size(18.dp)
                     )
                 }
+                // « @pseudo • Cotonou » — la ville vient du serveur depuis le 05/08.
+                // Affichée seulement si elle existe : jamais de lieu inventé.
+                if (state.city.isNotBlank()) {
+                    Box(Modifier.size(5.dp).clip(CircleShape).background(signature))
+                    Text(
+                        text = state.city,
+                        color = Ember.TextDim,
+                        fontFamily = EmberFont,
+                        fontSize = 16.sp,
+                        maxLines = 1
+                    )
+                }
             }
 
             // La bio, en italique entre guillemets — comme « Je suis le goat ».
@@ -1110,7 +1147,10 @@ private fun IdentityBlock(
                             .clip(CircleShape)
                             .background(c)
                             .then(if (selected) Modifier.border(2.dp, Ember.Text, CircleShape) else Modifier)
-                            .pressable(onClick = { signatureIdx = i })
+                            // Choix local immédiat (la couleur se propage tout de suite),
+                            // puis persistance serveur. Si le PATCH échoue, la prochaine
+                            // lecture du profil ramènera la valeur distante.
+                            .pressable(onClick = { pickedIdx = i; onPickSignature(SIGNATURE_HEX[i]) })
                     )
                 }
             }

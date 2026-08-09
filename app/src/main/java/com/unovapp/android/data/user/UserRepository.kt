@@ -22,6 +22,8 @@ interface UserRepository {
         username: String,
         websiteUrl: String? = null
     ): NetworkResult<UserProfileDto>
+    /** Enregistre la couleur de signature (`#RRGGBB` — le backend rejette le reste). */
+    suspend fun updateSignatureColor(id: String, hex: String): NetworkResult<UserProfileDto>
     suspend fun search(query: String, page: Int = 1, limit: Int = 20): NetworkResult<PagedResponse<UserSummaryDto>>
     suspend fun follow(id: String): NetworkResult<Unit>
     suspend fun unfollow(id: String): NetworkResult<Unit>
@@ -77,6 +79,13 @@ class UserRepositoryImpl(
             UpdateProfileRequest(displayName = displayName, bio = bio, username = username, websiteUrl = websiteUrl)
         ).also(profileStore::upsert)
     }
+
+    // Le PATCH n'envoie QUE ce champ : tous les autres sont optionnels côté backend,
+    // donc rien d'autre n'est touché — pas de risque d'écraser la bio au passage.
+    override suspend fun updateSignatureColor(id: String, hex: String): NetworkResult<UserProfileDto> =
+        safeCall {
+            api.updateProfile(id, UpdateProfileRequest(signatureColor = hex)).also(profileStore::upsert)
+        }
 
     override suspend fun search(query: String, page: Int, limit: Int): NetworkResult<PagedResponse<UserSummaryDto>> =
         safeCall { api.search(query, page, limit) }

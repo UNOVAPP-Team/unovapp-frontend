@@ -23,6 +23,18 @@ data class UserProfileDto(
     @SerializedName("is_following") val isFollowing: Boolean = false,
     @SerializedName("is_blocked") val isBlocked: Boolean = false,
     @SerializedName("website_url") val websiteUrl: String? = null,
+    /**
+     * Ville du créateur — libre, 100 caractères max. Livrée en production le 05/08.
+     * Alimente « @pseudo • Cotonou » de l'écran Univers. Toujours présente dans la
+     * réponse, `null` tant que l'utilisateur n'a rien saisi.
+     */
+    val city: String? = null,
+    /**
+     * Couleur de signature au format `#RRGGBB` — l'identité visuelle choisie à
+     * l'onboarding. Le backend REJETTE tout autre format en 400 : on ne lui envoie
+     * donc que des valeurs issues de [SIGNATURE_COLORS], jamais de saisie libre.
+     */
+    @SerializedName("signature_color") val signatureColor: String? = null,
     // Stats agrégées (Sprint 1/3)
     @SerializedName("videos_count") val videosCount: Int = 0,
     @SerializedName("total_views_received") val totalViewsReceived: Int = 0,
@@ -46,7 +58,11 @@ data class UpdateProfileRequest(
     val bio: String? = null,
     val username: String? = null,
     @SerializedName("website_url") val websiteUrl: String? = null,
-    @SerializedName("avatar_s3_key") val avatarS3Key: String? = null
+    @SerializedName("avatar_s3_key") val avatarS3Key: String? = null,
+    /** Ville — optionnelle comme le reste du PATCH (null = inchangée). */
+    val city: String? = null,
+    /** Couleur de signature `#RRGGBB` — voir [UserProfileDto.signatureColor]. */
+    @SerializedName("signature_color") val signatureColor: String? = null
 )
 
 /** GET /users/check?username= → { available }. */

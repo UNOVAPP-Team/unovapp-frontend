@@ -229,6 +229,27 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Persiste la couleur de signature (champ serveur livré le 05/08).
+     *
+     * Silencieux à dessein : le choix est déjà visible à l'écran (l'UI applique la
+     * couleur immédiatement), donc un échec réseau ne doit pas ouvrir une alerte pour
+     * un réglage esthétique. En cas d'échec, la prochaine lecture du profil ramènera
+     * simplement la valeur du serveur.
+     *
+     * [hex] doit valoir l'une des couleurs de la palette : le backend rejette en 400
+     * tout ce qui n'est pas `#RRGGBB`.
+     */
+    fun updateSignatureColor(hex: String) {
+        val id = _state.value.profile?.id ?: return
+        viewModelScope.launch {
+            when (val r = userRepository.updateSignatureColor(id, hex)) {
+                is NetworkResult.Success -> _state.update { it.copy(profile = r.data) }
+                is NetworkResult.Failure -> Unit
+            }
+        }
+    }
+
     fun clearSaveError() = _state.update { it.copy(saveError = null) }
 
     /* ---------- Changement de mot de passe ---------- */
