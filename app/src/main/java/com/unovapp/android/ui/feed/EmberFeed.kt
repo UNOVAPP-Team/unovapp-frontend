@@ -312,14 +312,17 @@ private fun CreatorBlock(
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "@${video.creatorUsername}",
-                    color = Ember.Text,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.4).sp,
-                    maxLines = 1
-                )
+                // Tant que le pseudo n'est pas résolu, on n'affiche pas de « @ » seul.
+                if (video.creatorUsername.isNotBlank()) {
+                    Text(
+                        text = "@${video.creatorUsername}",
+                        color = Ember.Text,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.4).sp,
+                        maxLines = 1
+                    )
+                }
                 // Badge vérifié en braise (pastille pleine + coche).
                 Box(
                     modifier = Modifier.size(18.dp).clip(CircleShape).background(Ember.Braise),

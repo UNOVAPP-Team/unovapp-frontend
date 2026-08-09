@@ -159,6 +159,7 @@ class FeedPlayerPool(
      * le manager selon [targetPreloadStatusControl]. À rappeler à chaque changement de page.
      */
     fun setWindow(currentPage: Int, urls: List<String?>, shouldPlay: Boolean) {
+        val pageChanged = current != currentPage
         current = currentPage
         playing = shouldPlay
 
@@ -187,6 +188,12 @@ class FeedPlayerPool(
         // 2) Lecteurs : courante d'abord (elle prend la bande passante), puis voisines ±1
         //    (surface attachée par FeedItem → première frame déjà décodée au swipe).
         bind(currentPage, urls)
+        // Une vidéo qu'on retrouve REPART DU DÉBUT. Le pool réutilise ses lecteurs par
+        // slot (page % N) et `bind` sort tôt quand l'URL n'a pas changé : sans ce seek,
+        // revenir sur une vidéo la reprenait en plein milieu, là où on l'avait laissée.
+        // On ne le fait qu'au changement de page, pour ne pas rembobiner sur un simple
+        // changement de son ou de lecture/pause.
+        if (pageChanged) players[slot(currentPage)].seekTo(0L)
         applyPlayback()
         bind(currentPage + 1, urls)
         bind(currentPage - 1, urls)

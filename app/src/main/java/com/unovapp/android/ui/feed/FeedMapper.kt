@@ -25,7 +25,11 @@ fun FeedVideoDto.toFeedVideoUi(
     hlsUrl = playbackUrl(videoBaseUrl),
     downloadUrl = bestStreamUrl(videoBaseUrl),
     durationSec = durationSeconds,
-    creatorUsername = username ?: creatorId.take(8),
+    // Le pseudo est résolu dans un second temps (resolveCreators). En attendant on
+    // laisse VIDE : l'ancien repli affichait les 8 premiers caractères de l'UUID, et
+    // l'utilisateur lisait « @f6bb5768 » — un identifiant technique présenté comme un
+    // pseudo. Mieux vaut ne rien montrer une seconde que montrer ça.
+    creatorUsername = username.orEmpty(),
     creatorAvatarIdx = abs(creatorId.hashCode()) % 5,
     avatarUrl = avatarUrl,
     thumbnailUrl = thumbnailUrl,
