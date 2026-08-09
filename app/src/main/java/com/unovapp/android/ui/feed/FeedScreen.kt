@@ -404,6 +404,9 @@ fun FeedScreen(
             commentCountFmt = video.commentsFmt,
             // Le créateur de la vidéo peut épingler des commentaires.
             isVideoOwner = currentUserId != null && video.creatorId == currentUserId,
+            // L'instant où l'Étincelle se plantera : la position de lecture au moment
+            // où l'on ouvre la feuille. C'est tout le propos — « Dis-le à 0:06 ».
+            anchorMs = (playbackProgress * playbackDurationMs).toLong().takeIf { playbackDurationMs > 0L },
             onDismiss = { commentsForVideoId = null }
         )
     }

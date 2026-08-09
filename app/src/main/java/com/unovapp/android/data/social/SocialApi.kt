@@ -93,7 +93,18 @@ interface SocialApi {
 
 data class CommentRequest(
     val content: String,
-    @SerializedName("parent_id") val parentId: String? = null
+    @SerializedName("parent_id") val parentId: String? = null,
+    /**
+     * Instant de la vidéo auquel l'Étincelle est plantée, en millisecondes.
+     *
+     * C'est ce qui distingue une Étincelle d'un commentaire ordinaire : elle
+     * appartient à un MOMENT, pas au bas de l'écran. Envoyé dès aujourd'hui —
+     * le backend l'ignore tant que le champ n'est pas livré (accepté pour août),
+     * et le jour où il l'accepte, l'app est déjà prête.
+     *
+     * `null` sur les RÉPONSES : l'ancre appartient au fil, pas à chaque message.
+     */
+    @SerializedName("anchor_ms") val anchorMs: Long? = null
 )
 
 /** Résultat de GET /search?q= — vidéos + utilisateurs. */
@@ -137,6 +148,13 @@ data class CommentDto(
     @SerializedName("is_pinned")     val isPinned: Boolean = false,
     @SerializedName("is_author")     val isAuthor: Boolean = false,
     val mentions: List<String>    = emptyList(),
+    /**
+     * Instant de la vidéo auquel l'Étincelle est plantée (ms). `null` = commentaire
+     * non ancré — soit une réponse, soit un commentaire écrit avant la livraison du
+     * champ côté backend. L'interface ne montre alors aucun horodatage plutôt qu'un
+     * instant inventé.
+     */
+    @SerializedName("anchor_ms")  val anchorMs: Long? = null,
     @SerializedName("created_at") val createdAt: String? = null
 )
 

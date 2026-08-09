@@ -103,7 +103,9 @@ data class CommentUi(
     val isLiked: Boolean = false,
     val repliesCount: Int = 0,
     val isAuthor: Boolean = false,
-    val mentions: List<String> = emptyList()
+    val mentions: List<String> = emptyList(),
+    /** Instant de la vidéo où l'Étincelle est plantée (ms). Null = non ancrée. */
+    val anchorMs: Long? = null
 )
 
 /**
@@ -134,6 +136,12 @@ fun CommentsSheet(
     commentCountFmt: String,
     onDismiss: () -> Unit,
     isVideoOwner: Boolean = false,
+    /**
+     * Position de lecture au moment où la feuille s'ouvre, en ms. C'est l'instant
+     * où l'Étincelle se plantera : « Dis-le à 0:06 ». Null hors du Flux (profil,
+     * notifications…) — on ne plante alors rien nulle part.
+     */
+    anchorMs: Long? = null,
     vm: CommentsViewModel = hiltViewModel()
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -299,8 +307,11 @@ fun CommentsSheet(
                             contentAlignment = Alignment.CenterStart
                         ) {
                             if (text.isEmpty()) {
+                                // On annonce l'instant AVANT d'écrire : l'utilisateur doit
+                                // savoir où son étincelle va se planter (« Dis-le à 0:06 »).
                                 Text(
-                                    text = "Laisse une étincelle…",
+                                    text = anchorMs?.let { "Dis-le à ${formatAnchor(it)}…" }
+                                        ?: "Laisse une étincelle…",
                                     color = Ember.TextMute,
                                     fontFamily = EmberFont,
                                     fontSize = 15.sp
@@ -315,7 +326,7 @@ fun CommentsSheet(
                 SendButton(
                     active = text.isNotBlank() && !state.isSending,
                     onClick = {
-                        vm.send(videoId, text)
+                        vm.send(videoId, text, anchorMs)
                         text = ""
                     }
                 )
@@ -434,6 +445,24 @@ private fun CommentRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // L'INSTANT d'abord, en braise : une Étincelle appartient à un moment
+                // de la vidéo, et c'est ce qui la distingue d'un commentaire ordinaire.
+                // Affiché seulement s'il existe vraiment — jamais d'instant inventé.
+                c.anchorMs?.let { ms ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        EtincelleGlyph(modifier = Modifier.size(11.dp))
+                        Text(
+                            text = formatAnchor(ms),
+                            color = Ember.BraiseClair,
+                            fontFamily = EmberFont,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
                 Text(
                     text = c.time,
                     color = UnovColors.TextMute,
@@ -508,4 +537,10 @@ private fun Divider() {
             .height(1.dp)
             .background(UnovColors.Line)
     )
+}
+
+/** « 0:06 » — l'instant d'une Étincelle, au format de la maquette. */
+private fun formatAnchor(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(total / 60, total % 60)
 }

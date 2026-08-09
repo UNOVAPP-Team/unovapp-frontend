@@ -263,7 +263,7 @@ fun EmberFeedItem(
             EmberTimeline(
                 progress = progress,
                 durationMs = if (durationMs > 0) durationMs else video.durationSec * 1000L,
-                sparkSeed = video.id.hashCode(),
+                sparkAnchorsMs = video.sparkAnchorsMs,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp)
             )
 
@@ -451,14 +451,22 @@ private fun SparkBubble(
 private fun EmberTimeline(
     progress: Float,
     durationMs: Long,
-    sparkSeed: Int,
+    /**
+     * Instants (ms) où des Étincelles sont plantées sur cette vidéo.
+     *
+     * Ces points étaient auparavant tirés au HASARD à partir de l'id de la vidéo :
+     * visuellement crédibles, mais entièrement faux — ils ne correspondaient à aucun
+     * commentaire. On ne dessine plus que des ancres réelles ; tant que le backend ne
+     * livre pas `anchor_ms`, la ligne reste nue, ce qui est la vérité.
+     */
+    sparkAnchorsMs: List<Long>,
     modifier: Modifier = Modifier
 ) {
-    // Positions des étincelles : marqueurs de la maquette. Placeholder visuel de la
-    // fonctionnalité Étincelle (commentaires ancrés) — pas encore de données backend.
-    val sparks = remember(sparkSeed) {
-        val r = kotlin.random.Random(sparkSeed)
-        listOf(0.18f + r.nextFloat() * 0.12f, 0.42f + r.nextFloat() * 0.12f, 0.66f + r.nextFloat() * 0.12f)
+    val sparks = remember(sparkAnchorsMs, durationMs) {
+        if (durationMs <= 0L) emptyList()
+        else sparkAnchorsMs
+            .filter { it in 0..durationMs }          // une ancre hors durée ne se dessine pas
+            .map { it.toFloat() / durationMs.toFloat() }
     }
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.weight(1f).height(14.dp), contentAlignment = Alignment.CenterStart) {

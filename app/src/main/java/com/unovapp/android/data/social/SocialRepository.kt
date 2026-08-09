@@ -11,7 +11,8 @@ import com.unovapp.android.data.video.ViewRequest
 
 interface SocialRepository {
     suspend fun comments(videoId: String, cursor: String? = null): NetworkResult<CommentPageDto>
-    suspend fun postComment(videoId: String, content: String, parentId: String? = null): NetworkResult<CommentDto>
+    /** [anchorMs] : instant de la vidéo où planter l'Étincelle. Null sur les réponses. */
+    suspend fun postComment(videoId: String, content: String, parentId: String? = null, anchorMs: Long? = null): NetworkResult<CommentDto>
     suspend fun deleteComment(videoId: String, commentId: String): NetworkResult<Unit>
     suspend fun like(videoId: String): NetworkResult<LikeResponse>
     suspend fun view(videoId: String): NetworkResult<Unit>
@@ -40,8 +41,8 @@ class SocialRepositoryImpl(
     override suspend fun comments(videoId: String, cursor: String?): NetworkResult<CommentPageDto> =
         safeCall { api.comments(videoId, cursor) }
 
-    override suspend fun postComment(videoId: String, content: String, parentId: String?): NetworkResult<CommentDto> =
-        safeCall { api.postComment(videoId, CommentRequest(content, parentId)) }
+    override suspend fun postComment(videoId: String, content: String, parentId: String?, anchorMs: Long?): NetworkResult<CommentDto> =
+        safeCall { api.postComment(videoId, CommentRequest(content, parentId, anchorMs)) }
 
     override suspend fun deleteComment(videoId: String, commentId: String): NetworkResult<Unit> =
         safeCall { api.deleteComment(videoId, commentId).close(); Unit }

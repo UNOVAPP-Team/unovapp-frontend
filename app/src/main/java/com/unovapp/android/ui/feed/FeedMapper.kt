@@ -44,5 +44,8 @@ fun FeedVideoDto.toFeedVideoUi(
     hashtags = hashtags,
     visibility = visibility,
     giftsFmt = "0",
-    createdAt = createdAt
+    createdAt = createdAt,
+    // Ancres réelles des Étincelles. Le champ arrive vide tant que le backend ne l'a
+    // pas livré → la ligne de temps reste nue, au lieu des points aléatoires d'avant.
+    sparkAnchorsMs = sparkAnchorsMs
 )

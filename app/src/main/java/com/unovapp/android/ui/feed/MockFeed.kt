@@ -57,7 +57,16 @@ data class FeedVideoUi(
     /** Lieu réel de tournage (libellé libre). Alimente « CE MOMENT » (écran 02). */
     val locationLabel: String? = null,
     /** Défi rejoint par la vidéo, sans le « # ». Alimente « CE MOMENT » (écran 02). */
-    val challengeTag: String? = null
+    val challengeTag: String? = null,
+    /**
+     * Instants (ms) où des Étincelles sont plantées sur la vidéo.
+     *
+     * Alimente les points de la ligne de temps. Ils étaient auparavant tirés au
+     * hasard depuis l'id de la vidéo — crédibles mais faux. Vide tant que le backend
+     * ne livre pas `spark_anchors_ms` (accepté pour août) : une ligne nue vaut mieux
+     * qu'une ligne qui ment.
+     */
+    val sparkAnchorsMs: List<Long> = emptyList()
 ) {
     /** URL à partager/télécharger : la rendition concrète, jamais la data-URI de lecture. */
     val shareableUrl: String get() = downloadUrl.ifBlank { hlsUrl }

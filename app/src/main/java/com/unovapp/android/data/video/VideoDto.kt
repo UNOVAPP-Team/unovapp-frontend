@@ -21,6 +21,7 @@ data class FeedVideoDto(
     val visibility: String?           = null,
     @SerializedName("allow_comments") val allowComments: Boolean = true,
     val status: String                = "published",
+    @SerializedName("spark_anchors_ms") val sparkAnchorsMs: List<Long> = emptyList(),
     @SerializedName("created_at")     val createdAt: String      = ""
 ) {
     /** URL de la meilleure rendition concrète — téléchargement, partage, copie de lien. */

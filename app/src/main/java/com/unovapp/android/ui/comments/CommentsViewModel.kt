@@ -55,11 +55,17 @@ class CommentsViewModel @Inject constructor(
         }
     }
 
-    fun send(videoId: String, content: String) {
+    /**
+     * Publie une Étincelle. [anchorMs] est l'instant de la vidéo où elle se plante :
+     * c'est ce qui en fait une Étincelle et non un commentaire de bas de page.
+     * `null` quand on ne connaît pas la position de lecture (feuille ouverte hors
+     * du Flux, par exemple) — on n'invente alors aucun instant.
+     */
+    fun send(videoId: String, content: String, anchorMs: Long? = null) {
         if (content.isBlank() || videoId.isBlank()) return
         viewModelScope.launch {
             _state.update { it.copy(isSending = true) }
-            when (val r = socialRepository.postComment(videoId, content)) {
+            when (val r = socialRepository.postComment(videoId, content, anchorMs = anchorMs)) {
                 is NetworkResult.Success -> {
                     // Un commentaire fraîchement posté est « à l'instant » si le backend ne renvoie
                     // pas (ou pas dans un format lisible) sa date de création.
@@ -137,7 +143,8 @@ class CommentsViewModel @Inject constructor(
         isLiked = isLiked,
         repliesCount = repliesCount,
         isAuthor = isAuthor,
-        mentions = mentions
+        mentions = mentions,
+        anchorMs = anchorMs
     )
 
     private fun formatRelativeTime(createdAt: String?): String {
