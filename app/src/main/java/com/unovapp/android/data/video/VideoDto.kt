@@ -21,7 +21,14 @@ data class FeedVideoDto(
     val visibility: String?           = null,
     @SerializedName("allow_comments") val allowComments: Boolean = true,
     val status: String                = "published",
-    @SerializedName("spark_anchors_ms") val sparkAnchorsMs: List<Long> = emptyList(),
+    /**
+     * Instants des Étincelles (ms). **NULLABLE volontairement** : Gson instancie par
+     * réflexion et NE respecte PAS les valeurs par défaut de Kotlin — un champ absent
+     * du JSON arrive donc à `null`, pas à `emptyList()`. Déclarer ce champ non-nullable
+     * faisait planter l'app dès qu'une vidéo était mappée (le backend ne livre pas
+     * encore `spark_anchors_ms`). On coerce à la lecture, dans le mapper.
+     */
+    @SerializedName("spark_anchors_ms") val sparkAnchorsMs: List<Long>? = null,
     @SerializedName("created_at")     val createdAt: String      = ""
 ) {
     /** URL de la meilleure rendition concrète — téléchargement, partage, copie de lien. */
