@@ -81,10 +81,12 @@ import com.unovapp.android.ui.theme.Ember
 import com.unovapp.android.ui.theme.EmberDim
 import com.unovapp.android.ui.theme.EmberMotion
 import com.unovapp.android.ui.theme.GlowPulse
+import com.unovapp.android.ui.theme.LocalReducedMotion
 import com.unovapp.android.ui.theme.animatedAccent
 import com.unovapp.android.ui.theme.appear
 import com.unovapp.android.ui.theme.arcOpen
 import com.unovapp.android.ui.theme.breathe
+import com.unovapp.android.ui.theme.countUp
 import com.unovapp.android.ui.theme.pressable
 import com.unovapp.android.ui.theme.riseIn
 import com.unovapp.android.ui.theme.staggerDelay
@@ -532,6 +534,47 @@ private fun Modifier.reactFanIn(k: Int): Modifier = appear(
     delayMs = staggerDelay(k, 28)
 )
 
+/* ── La VAGUE de la colonne de réactions ──────────────────────────────────────
+ *
+ * Les six pastilles arrivent de la DROITE et se rangent en colonne parfaitement
+ * droite. Toute l'animation est dans la façon d'y parvenir : elles montent en
+ * vague, du bas vers le haut.
+ *
+ * Trois réglages font l'effet :
+ *
+ *  1. Le RETARD croît vers le haut (WAVE_STEP par cran). La Braise se pose la
+ *     première, sa voisine suit, et ainsi de suite jusqu'à Envoyer : l'œil lit
+ *     une crête qui remonte le long du bord droit.
+ *  2. La DISTANCE croît aussi vers le haut : plus une pastille est haute, plus
+ *     elle vient de loin sur la droite. Elles ne partent donc pas toutes du même
+ *     endroit — c'est ce qui donne l'ondulation plutôt qu'un simple défilé.
+ *  3. La DURÉE croît légèrement vers le haut : les pastilles hautes voyagent plus
+ *     longtemps, donc plus lentement. Sans ça, celles qui viennent de plus loin
+ *     paraîtraient filer plus vite que les autres, et la vague se casserait.
+ *
+ * L'ensemble démarre après WAVE_LEAD, pour que l'arc de navigation du bas soit
+ * déjà en place : le regard part du pouce, puis remonte.
+ */
+private const val WAVE_LEAD = 170      // retard sur l'arc de navigation
+private const val WAVE_STEP = 115      // écart entre deux pastilles
+private const val WAVE_BASE_MS = 460   // course de la première (la Braise)
+private const val WAVE_GROWTH = 34     // allongement par cran vers le haut
+
+@Composable
+private fun Modifier.reactWaveIn(k: Int): Modifier {
+    val reduced = LocalReducedMotion.current
+    // En reduced-motion : opacité seule, sans vague ni décalage (§8).
+    if (reduced) return appear(dxFrom = 0.dp, dyFrom = 0.dp, durationMs = EmberMotion.DurQuick)
+    return appear(
+        dxFrom = (46 + k * 14).dp,               // plus haut = vient de plus loin
+        dyFrom = 6.dp,                            // léger appui vers le haut (R4)
+        scaleFrom = 0.9f,
+        durationMs = WAVE_BASE_MS + k * WAVE_GROWTH,
+        easing = EmberMotion.EaseOut,             // décélération douce, sans rebond
+        delayMs = WAVE_LEAD + k * WAVE_STEP
+    )
+}
+
 /* ---------- Une action de l'arc éveillé (étiquette à gauche, pastille à droite) ---------- */
 
 @Composable
@@ -543,15 +586,25 @@ private fun ArcAction(
     primary: Boolean = false,
     labelColor: Color = Ember.TextDim,
     /**
-     * Décalage vers l'intérieur qui donne sa COURBURE à l'arc. Mesuré sur la maquette
-     * (écran 02) : les centres des pastilles décrivent un arc de cercle dont le point
-     * le plus à gauche tombe sur Étinceler/Garder, et qui repart vers la droite en
-     * montant comme en descendant. Sans ça, on obtient une colonne droite — ce que
-     * la maquette ne montre pas.
+     * Recul depuis le bord droit.
+     *
+     * La colonne est désormais PARFAITEMENT DROITE : les pastilles s'empilent l'une
+     * au-dessus de l'autre, et toute l'animation tient dans la façon d'y arriver.
+     *
+     * Une subtilité : la Braise fait 56 dp quand les autres font 44. Alignées par le
+     * bord droit, leurs CENTRES seraient décalés de 6 dp — un désalignement discret
+     * mais visible sur une colonne verticale. Les cinq petites reculent donc de 6 dp
+     * pour que tous les centres tombent sur le même axe.
      */
     arcInset: androidx.compose.ui.unit.Dp = 0.dp,
     /** Action à bascule déjà accomplie : la pastille s'allume et le dit. */
     active: Boolean = false,
+    /**
+     * Compteur affiché sous le libellé (lueurs, braises, étincelles reçues).
+     * **Zéro n'affiche RIEN** : un « 0 » sous chaque action donnerait à une vidéo
+     * neuve un air d'échec, alors qu'elle vient simplement de paraître.
+     */
+    count: Int = 0,
     icon: @Composable () -> Unit
 ) {
     Row(
@@ -559,13 +612,26 @@ private fun ArcAction(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(
-            label,
-            color = labelColor,
-            fontSize = 15.sp,
-            fontWeight = if (primary) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1, softWrap = false
-        )
+        // Libellé + compteur, alignés à droite pour rester collés à la pastille.
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                label,
+                color = labelColor,
+                fontSize = 15.sp,
+                fontWeight = if (primary) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1, softWrap = false
+            )
+            // Le compteur monte en `countUp` : un nombre ne saute jamais (§3.9).
+            if (count > 0) {
+                Text(
+                    formatFeedCount(countUp(count, fromZero = false)),
+                    color = if (primary) Ember.Braise else Ember.Text,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1, softWrap = false
+                )
+            }
+        }
         if (primary) {
             // La Braise (§7.5) : Ø 56, anneau de progression r=25 trait 2.5 rempli à
             // 66 %, noyau incandescent Ø 46 (inset 5). Seul item de la colonne à
@@ -847,6 +913,10 @@ fun OrbeNavRow(
      */
     isLiked: Boolean = false,
     isSaved: Boolean = false,
+    /** Compteurs affichés sous chaque action. Zéro = rien affiché. */
+    lueurCount: Int = 0,
+    braiseCount: Int = 0,
+    etincelleCount: Int = 0,
     /** Destination active, pour l'accent braise dans la rangée. */
     activeTab: com.unovapp.android.ui.components.MainTab = com.unovapp.android.ui.components.MainTab.Feed,
     modifier: Modifier = Modifier
@@ -897,16 +967,15 @@ fun OrbeNavRow(
                 // « transform-origin = la position de l'Orbe »). Plus il est haut dans
                 // l'arc, plus il vient de loin — d'où le facteur k. Stagger 28 ms, la
                 // Braise partant EN PREMIÈRE (k = 0).
-                ArcAction("Envoyer", onEnvoyer, Modifier.reactFanIn(5), arcInset = 0.dp) {
+                ArcAction("Envoyer", onEnvoyer, Modifier.reactWaveIn(4), arcInset = 6.dp) {
                     Icon(Icons.AutoMirrored.Filled.Send, "Envoyer", tint = Ember.Text, modifier = Modifier.size(22.dp))
                 }
-                ArcAction("Offrir", onOffrir, Modifier.reactFanIn(4), arcInset = 14.dp) {
-                    Icon(Icons.Outlined.CardGiftcard, "Offrir", tint = Ember.Text, modifier = Modifier.size(22.dp))
-                }
+                // Plus d'action « Offrir » : la BRAISE porte désormais le cadeau. Deux
+                // entrées pour un même geste divisaient l'attention et l'économie.
                 // Garder : marque-page PLEIN et braise quand la vidéo est déjà gardée.
                 ArcAction(
                     if (isSaved) "Gardée" else "Garder",
-                    onGarder, Modifier.reactFanIn(3), arcInset = 22.dp,
+                    onGarder, Modifier.reactWaveIn(3), arcInset = 6.dp,
                     active = isSaved,
                     labelColor = if (isSaved) Ember.BraiseClair else Ember.TextDim
                 ) {
@@ -917,7 +986,7 @@ fun OrbeNavRow(
                         modifier = Modifier.size(22.dp)
                     )
                 }
-                ArcAction("Étinceler", onEtinceler, Modifier.reactFanIn(2), arcInset = 22.dp) {
+                ArcAction("Étinceler", onEtinceler, Modifier.reactWaveIn(2), arcInset = 6.dp, count = etincelleCount) {
                     SparkIcon(modifier = Modifier.size(22.dp))
                 }
                 // La Lueur : son propre halo part de sa pastille au moment du tap, pour
@@ -926,10 +995,11 @@ fun OrbeNavRow(
                 ArcAction(
                     if (isLiked) "Lueur déposée" else "Lueur · gratuit",
                     onClick = { lueurLocal++; onLueur() },
-                    modifier = Modifier.reactFanIn(1),
-                    arcInset = 22.dp,
+                    modifier = Modifier.reactWaveIn(1),
+                    arcInset = 6.dp,
                     active = isLiked,
-                    labelColor = if (isLiked) Ember.BraisePale2 else Ember.TextDim
+                    labelColor = if (isLiked) Ember.BraisePale2 else Ember.TextDim,
+                    count = lueurCount
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         GlowPulse(
@@ -943,11 +1013,12 @@ fun OrbeNavRow(
                 }
                 // La Braise arrive EN PREMIER et reste le seul élément qui boucle.
                 ArcAction(
-                    "Braise · jeton", onBraise,
-                    Modifier.reactFanIn(0),
+                    "Braise · cadeau", onBraise,
+                    Modifier.reactWaveIn(0),
                     primary = true,
                     labelColor = Ember.Braise,
-                    arcInset = 14.dp
+                    arcInset = 0.dp,
+                    count = braiseCount
                 ) {
                     Icon(Icons.Filled.LocalFireDepartment, "Braise", tint = Ember.BraisePale2, modifier = Modifier.size(26.dp))
                 }

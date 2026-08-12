@@ -371,9 +371,14 @@ fun FeedScreen(
             // c'est déjà fait, au lieu de laisser l'utilisateur deviner.
             isLiked = orbeVideo?.isLiked == true,
             isSaved = orbeVideo?.isSaved == true,
+            // Compteurs réels : lueurs = réactions gratuites, braises = cadeaux reçus,
+            // étincelles = commentaires ancrés. Zéro n'affiche rien.
+            lueurCount = orbeVideo?.likesCount ?: 0,
+            braiseCount = orbeVideo?.giftsCount ?: 0,
+            etincelleCount = orbeVideo?.commentsCount ?: 0,
             // Braise = réaction payante : une confirmation explicite (–1 jeton) s'interpose
             // (§La Braise — jamais par accident). La Lueur reste gratuite et sans garde-fou.
-            onBraise = { braiseConfirm = true },
+            onBraise = { orbeOpen = false; giftSheetOpen = true },
             // ── Les deux BASCULES ne referment PAS l'arc ────────────────────────
             // La spec ne liste que trois déclencheurs de fermeture : tap sur l'Orbe,
             // tap ailleurs, ou 3,2 s d'inactivité (§6.7). En fermant sur l'action,
@@ -392,7 +397,6 @@ fun FeedScreen(
             },
             // ── Celles-ci ouvrent autre chose : là, fermer l'arc est justifié ───
             onEtinceler = { orbeOpen = false; commentsForVideoId = orbeVideo?.id },
-            onOffrir = { orbeOpen = false; giftSheetOpen = true },
             onEnvoyer = { orbeOpen = false; orbeVideo?.let { shareVideo(context, it) } }
         )
     }
