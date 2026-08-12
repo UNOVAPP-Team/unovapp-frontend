@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -207,6 +208,17 @@ fun EmberFeedItem(
             diameter = 220.dp
         )
 
+        // …puis la VOLÉE : une poignée de lueurs s'élève depuis le bas droit, ondule
+        // et sort par le haut. Placée sur la moitié droite pour naître près du pouce
+        // et de la pastille Lueur, sans traverser le visage de la vidéo.
+        LueurWave(
+            trigger = lueurPulse,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 24.dp, bottom = bottomInset + 120.dp)
+                .size(width = 150.dp, height = 380.dp)
+        )
+
         // Flamme au double-tap.
         AnimatedVisibility(
             visible = flamePop > 0,
@@ -266,6 +278,7 @@ fun EmberFeedItem(
                 progress = progress,
                 durationMs = if (durationMs > 0) durationMs else video.durationSec * 1000L,
                 sparkAnchorsMs = video.sparkAnchorsMs,
+                braiseCount = video.giftsCount,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp)
             )
 
@@ -450,6 +463,61 @@ private fun SparkBubble(
     }
 }
 
+/**
+ * LA VAGUE DE LUEURS — le retour visuel de la réaction gratuite.
+ *
+ * Un tap ne fait pas naître UNE lueur mais une petite volée : elles s'élèvent en
+ * dérivant doucement, s'effacent, et sortent par le haut de l'écran. C'est le
+ * geste le plus fréquent de l'app, donc le plus important à rendre agréable — et
+ * le plus dangereux à rendre bruyant.
+ *
+ * Trois choix pour qu'il reste doux :
+ *  · chaque lueur part avec un décalage, une taille et une dérive propres, tirés
+ *    d'un `Random` semé par son rang — deux volées ne se ressemblent jamais, sans
+ *    coûter d'état ;
+ *  · la dérive horizontale suit une sinusoïde légère : elles ondulent au lieu de
+ *    monter droit, ce qui évite l'effet « jet de particules » ;
+ *  · l'opacité s'éteint AVANT le haut de la course, pour qu'aucune ne disparaisse
+ *    brutalement au bord de l'écran.
+ *
+ * Coupée en reduced-motion : la Lueur reste confirmée par la pastille et l'haptique.
+ */
+@Composable
+private fun LueurWave(trigger: Int, modifier: Modifier = Modifier) {
+    if (LocalReducedMotion.current || trigger == 0) return
+    val count = 7
+    val p = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(trigger) {
+        p.snapTo(0f)
+        p.animateTo(1f, tween(1500, easing = EmberMotion.EaseOut))
+    }
+    if (p.value >= 1f) return
+    Canvas(modifier = modifier) {
+        val rnd = kotlin.random.Random(trigger)
+        for (i in 0 until count) {
+            // Décalage de départ : la volée s'étire au lieu de partir d'un bloc.
+            val delay = i * 0.075f
+            val t = ((p.value - delay) / (1f - delay)).coerceIn(0f, 1f)
+            if (t <= 0f) continue
+            val startX = size.width * (0.5f + (rnd.nextFloat() - 0.5f) * 0.5f)
+            val amp = size.width * (0.04f + rnd.nextFloat() * 0.05f)
+            val rise = size.height * (0.55f + rnd.nextFloat() * 0.4f)
+            // Ondulation : dérive sinusoïdale, pas une montée rectiligne.
+            val x = startX + kotlin.math.sin(t * 3.1f + i).toFloat() * amp
+            val y = size.height - rise * t
+            // S'éteint avant le sommet : jamais de disparition sèche au bord.
+            val alpha = when {
+                t < 0.15f -> t / 0.15f
+                t > 0.65f -> ((1f - t) / 0.35f).coerceIn(0f, 1f)
+                else -> 1f
+            }
+            val r = (5f + rnd.nextFloat() * 4f).dp.toPx() * (0.7f + 0.3f * (1f - t))
+            drawCircle(Ember.BraisePale2.copy(alpha = alpha * 0.30f), radius = r * 2.1f, center = Offset(x, y))
+            drawCircle(Ember.BraisePale2.copy(alpha = alpha * 0.92f), radius = r, center = Offset(x, y))
+        }
+    }
+}
+
 /* ---------- Ligne de temps + étincelles ---------- */
 
 @Composable
@@ -465,6 +533,10 @@ private fun EmberTimeline(
      * livre pas `anchor_ms`, la ligne reste nue, ce qui est la vérité.
      */
     sparkAnchorsMs: List<Long>,
+    /**
+     * Braises reçues par la vidéo. **Elle CHAUFFE la barre** — voir [heat] plus bas.
+     */
+    braiseCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val sparks = remember(sparkAnchorsMs, durationMs) {
@@ -473,14 +545,56 @@ private fun EmberTimeline(
             .filter { it in 0..durationMs }          // une ancre hors durée ne se dessine pas
             .map { it.toFloat() / durationMs.toFloat() }
     }
+
+    /*
+     * LA CHALEUR DE LA BARRE — plus une vidéo reçoit de braises, plus sa barre brûle.
+     *
+     * Échelle LOGARITHMIQUE, et c'est le cœur de l'idée : entre 0 et 10 braises la
+     * différence doit se voir (c'est là que se joue l'encouragement d'un créateur qui
+     * démarre), tandis qu'entre 5 000 et 10 000 elle n'a plus d'intérêt. Une échelle
+     * linéaire aurait écrasé tous les débutants au même gris.
+     *
+     * La chaleur pilote TROIS choses à la fois, comme un vrai métal qu'on chauffe :
+     *   · la COULEUR : braise sombre → braise → orange clair → blanc chaud ;
+     *   · l'ÉPAISSEUR : 3 dp à froid, jusqu'à 5 dp à blanc ;
+     *   · le HALO : une lueur diffuse sous le trait, qui n'apparaît qu'à partir d'une
+     *     vidéo réellement chaude — sinon tout le feed brillerait et plus rien ne
+     *     signifierait rien.
+     */
+    val heat = remember(braiseCount) {
+        if (braiseCount <= 0) 0f
+        else (kotlin.math.ln(1f + braiseCount) / kotlin.math.ln(1f + 2000f)).coerceIn(0f, 1f)
+    }
+    // La couleur transite doucement quand le compteur bouge (une braise reçue en direct).
+    val hotColor by androidx.compose.animation.animateColorAsState(
+        targetValue = when {
+            heat <= 0f    -> Ember.Braise
+            heat < 0.35f  -> lerpColor(Ember.Braise, Ember.BraiseClair, heat / 0.35f)
+            heat < 0.7f   -> lerpColor(Ember.BraiseClair, Ember.BraisePale, (heat - 0.35f) / 0.35f)
+            else          -> lerpColor(Ember.BraisePale, Ember.BraisePale2, (heat - 0.7f) / 0.3f)
+        },
+        animationSpec = tween(EmberMotion.DurSlow, easing = EmberMotion.EaseSoft),
+        label = "barHeat"
+    )
+
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.weight(1f).height(14.dp), contentAlignment = Alignment.CenterStart) {
-            Canvas(modifier = Modifier.fillMaxWidth().height(3.dp)) {
+            Canvas(modifier = Modifier.fillMaxWidth().height(10.dp)) {
                 val y = size.height / 2f
+                val done = size.width * progress.coerceIn(0f, 1f)
+                val stroke = (3f + 2f * heat).dp.toPx()
                 // Piste.
                 drawLine(Ember.Line, Offset(0f, y), Offset(size.width, y), 3.dp.toPx(), StrokeCap.Round)
-                // Progression en braise.
-                drawLine(Ember.Braise, Offset(0f, y), Offset(size.width * progress.coerceIn(0f, 1f), y), 3.dp.toPx(), StrokeCap.Round)
+                // Halo de chaleur — réservé aux vidéos vraiment chaudes.
+                if (heat > 0.25f && done > 0f) {
+                    drawLine(
+                        hotColor.copy(alpha = 0.22f * heat),
+                        Offset(0f, y), Offset(done, y),
+                        stroke * 3.2f, StrokeCap.Round
+                    )
+                }
+                // Progression, dans la couleur de sa chaleur.
+                drawLine(hotColor, Offset(0f, y), Offset(done, y), stroke, StrokeCap.Round)
             }
             // Points d'étincelle blancs.
             Canvas(modifier = Modifier.fillMaxWidth().height(14.dp)) {
@@ -1284,4 +1398,15 @@ private fun LueurIcon(modifier: Modifier = Modifier, color: Color = Ember.Text) 
 private fun formatClock(ms: Long): String {
     val total = (ms / 1000).coerceAtLeast(0)
     return "%d:%02d".format(total / 60, total % 60)
+}
+
+/** Interpolation linéaire entre deux couleurs (pour l'échelle de chaleur de la barre). */
+private fun lerpColor(a: Color, b: Color, t: Float): Color {
+    val f = t.coerceIn(0f, 1f)
+    return Color(
+        red = a.red + (b.red - a.red) * f,
+        green = a.green + (b.green - a.green) * f,
+        blue = a.blue + (b.blue - a.blue) * f,
+        alpha = a.alpha + (b.alpha - a.alpha) * f
+    )
 }
